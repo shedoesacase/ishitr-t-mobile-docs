@@ -2,7 +2,7 @@
 
 [![Status](https://img.shields.io/badge/Status-In%20Progress-yellow)]()
 [![Role](https://img.shields.io/badge/Role-System%20Analyst-blue)]()
-[![Docs Version](https://img.shields.io/badge/Docs-v0.1.0-orange)]()
+[![Docs Version](https://img.shields.io/badge/Docs-v0.2.0-orange)]()
 [![License](https://img.shields.io/badge/License-MIT-green)]()
 
 > Командный проект в рамках ИШИТР+. Мобильное приложение и бэкенд для управления семейной группой, контроля тарифов, настройки лимитов и отслеживания потребления ресурсов (трафик, минуты) участниками в экосистеме Т-мобайл.
