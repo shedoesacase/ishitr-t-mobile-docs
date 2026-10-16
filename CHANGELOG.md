@@ -6,15 +6,7 @@
 
 ## Неопубликованное
 
-### ➕ Добавлено
 
-### 🔄 Изменено
-* **Data_Dictionary.md:**
-	- В таблице 8 поле is_active переименовано в поле is_blocked и теперь связано с UC-02.
-* **Use_Cases.md:**
-	* Отредактирован альтернативный сценарий 5а в UC-02.
-* **Business_Requirements.md:**
-	* Дополнен BR-18.
 
 ---
 
@@ -55,3 +47,23 @@
 	- Изменена связь family_group:group_member в домене 2.
 	- Добавлены недостающие связи в домены 4 и 5.
 	- В таблице 17 поля actor_user_id и target_user_id теперь FK на 1 таблицу.
+
+---
+
+## [0.2.1] — 16-10-2026
+### ➕ Добавлено
+* **Generator_Concept_and_Architecture.md:**
+	* Создан файл Generator_Concept_and_Architecture.md
+	* Описана архитектура и концепция генератора
+* **Generator-Backend_API.yaml:**
+	* Создан файл Generator-Backend_API.yaml
+	* Описаны некоторые эндпоинты апи генератора
+* **README.md:**
+	* Добавлена ссылка на дизайн-концепт в фигме.
+### 🔄 Изменено
+* **Data_Dictionary.md:**
+	- В таблице 8 поле is_active переименовано в поле is_blocked и теперь связано с UC-02.
+* **Use_Cases.md:**
+	* Отредактирован альтернативный сценарий 5а в UC-02.
+* **Business_Requirements.md:**
+	* Дополнен BR-18.

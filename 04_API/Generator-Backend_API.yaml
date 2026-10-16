@@ -1,0 +1,485 @@
+openapi: 3.0.3
+info:
+  title: Generator <-> Backend API
+  description: Контракт между сервисом-генератором и основным бекендом.
+  version: 13.10.2026
+servers:
+  - url: http://localhost:8080
+
+paths:
+  /api/v1/admin/tariffs:
+    post:
+      summary: Создать новый тариф
+      tags:
+        - Тарифы
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ServicePackageCreate'
+      responses:
+        '201':
+          description: Тариф успешно создан
+        '400':
+          description: Ошибка валидации данных
+    get:
+      summary: Получить список всех тарифов
+      description: Возвращает массив всех тарифов с их названием и параметрами. Используется для отображения на дашборде генератора.
+      tags:
+        - Тарифы
+      responses:
+        '200':
+          description: Успешный ответ со списком тарифов
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ServicePackage'
+        '500':
+          description: Внутренняя ошибка сервера
+
+  /api/v1/admin/users:
+    post:
+      summary: Создать нового тестового пользователя
+      description: Создает пользователя с номером телефона. Пользователь создается в обход системы авторизации.
+      tags:
+        - Пользователи и Группы
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserCreate'
+      responses:
+        '201':
+          description: Пользователь успешно создан
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          description: Ошибка валидации
+        '409':
+          description: Такой номер телефона уже зарегестрирован в системе
+    get:
+      summary: Получить список всех пользователей
+      description: Возвращает массив всех зарегистрированных пользователей с информацией об их группах и ролях. Используется для отображения на дашборде генератора.
+      tags:
+        - Пользователи и Группы
+      responses:
+        '200':
+          description: Успешный ответ со списком пользователей
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/User'
+        '500':
+          description: Внутренняя ошибка сервера
+
+  /api/v1/admin/time:
+    get:
+      summary: Получить текущий статус времени
+      description: Возвращает текущее реальное время, виртуальное время системы, текущий множитель ускорения и статус паузы.
+      tags:
+        - Управление временем
+      responses:
+        '200':
+          description: Успешный ответ со статусом времени
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TimeStatus'
+        '500':
+          description: Внутренняя ошибка сервера
+
+  /api/v1/admin/events/background/user/start:
+    post:
+      summary: Запуск фонового потока генерации данных для отдельного пользователя
+      tags:
+        - События
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserBackgroundStartRequest'
+      responses:
+        '201':
+          description: Поток успешно запущен
+        '409':
+          description: Поток уже запущен
+
+  /api/v1/admin/events/background/user/stop:
+    post:
+      summary: Остановка фонового потока генерации данных для отдельного пользователя
+      tags:
+        - События
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserBackgroundStopRequest'
+      responses:
+        '201':
+          description: Поток успешно остановлен
+        '409':
+          description: Поток уже был остановлен
+
+  /api/v1/admin/events/background/group/start:
+    post:
+      summary: Запуск фонового потока генерации данных для отдельной группы
+      tags:
+        - События
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GroupBackgroundStartRequest'
+      responses:
+        '201':
+          description: Поток успешно запущен
+        '409':
+          description: Поток уже был запущен
+
+  /api/v1/admin/events/background/group/stop:
+    post:
+      summary: Остановка фонового потока генерации данных для отдельной группы
+      tags:
+        - События
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GroupBackgroundStopRequest'
+      responses:
+        '201':
+          description: Поток успешно остановлен
+        '409':
+          description: Поток уже был остановлен
+
+  /api/v1/admin/events/anomaly/user/start:
+    post:
+      summary: Запуск аномального скачка потребления для отдельного пользователя
+      description: Аномальный скачок потребления длится 6 виртуальных часов и, по истечении 6 часов, должен израсходовать заданное количество ресурса. Скорость расхода равна отношению объема требуемого расхода к 6. В случае, если ресурса меньше, чем задано (в запросе 15%, а по факту 10%), скорость сохраняется и событие автоматически останавливается по достижению конца трафика.
+      tags:
+        - События
+      requestBody:
+        required: true
+        content:
+          application/json: 
+            schema: 
+              $ref: '#/components/schemas/UserAnomalyRequest'
+      responses: 
+        '201':
+          description: Скачок запущен
+        '409':
+          description: Скачок уже был запущен
+        
+
+  /api/v1/admin/groups:
+    get:
+      summary: Получить список всех семейных групп
+      description: Возвращает массив всех созданных групп для отображения на дашборде.
+      tags:
+        - Пользователи и Группы
+      responses:
+        '200':
+          description: Успешный ответ со списком групп
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/FamilyGroup'
+
+components:
+  schemas:
+    User:
+      type: object
+      required:
+        - user_id
+        - phone_number
+      properties:
+        user_id:
+          type: integer
+          description: Уникальный идентификатор пользователя
+          example: 123
+        phone_number:
+          type: string
+          description: Номер телефона в международном формате
+          example: "+79991234567"
+        group_id:
+          type: integer
+          nullable: true
+          description: ID группы, если пользователь состоит в группе. Null, если не состоит.
+          example: 100
+        role:
+          type: string
+          enum: 
+            - OWNER
+            - MEMBER
+          nullable: true
+          description: Роль в группе. Null, если не состоит в группе.
+          example: OWNER
+        status:
+          type: string
+          enum: 
+            - ACTIVE
+            - LEAVE
+            - EXCLUDED
+          nullable: true
+          description: Статус участия в группе. Null, если не состоит в группе.
+          example: ACTIVE
+
+    UserCreate:
+      type: object
+      required: 
+        - phone_number
+      properties: 
+        phone_number:
+          type: string
+          description: Номер телефона в международном формате для создания пользователя
+          example: "+79990000001"
+
+    FamilyGroup:
+      type: object
+      required: 
+        - group_id
+        - status
+        - created_at
+        - members_count
+        - owner_id
+      properties: 
+        group_id:
+          type: integer
+          example: 100
+        owner_id:
+          type: integer
+          description: ID пользователя-владельца группы (FK на User)
+          example: 123
+        status:
+          type: string
+          enum: 
+            - ACTIVE
+            - DISBANDED
+          example: ACTIVE
+        created_at:
+          type: string
+          format: date-time
+          description: Дата и время создания группы
+          example: "2026-10-13T20:43:31+03:00"
+        members_count:
+          type: integer
+          description: Количество участников в группе (от 1 до 5, включая владельца, согласно BR-11)
+          minimum: 1
+          maximum: 5
+          example: 3
+
+    ServicePackage:
+      type: object
+      required: 
+        - package_id
+        - name
+        - total_traffic
+        - total_minutes
+      properties: 
+        package__id:
+          type: integer
+          example: 100
+        name:
+          type: string
+          example: "Бюджетный"
+        total_traffic:
+          type: number
+          format: double
+          description: Общий объем трафика в ГБ
+          minimum: 0
+          example: 63.31
+        total_minutes:
+          type: integer
+          description: Общий объем минут
+          minimum: 0
+          example: 455
+
+    ServicePackageCreate:
+      type: object
+      required: 
+        - name
+        - total_traffic
+        - total_minutes
+      properties: 
+        name:
+          type: string
+          example: "Бюджетный"
+        total_traffic:
+          type: number
+          format: double
+          description: Объем трафика в ГБ
+          minimum: 0
+          example: 63.31
+        total_minutes:
+          type: integer
+          description: Объем минут
+          minimum: 0
+          example: 455
+
+    TimeStatus:
+      type: object
+      required: 
+        - real_time
+        - virtual_time
+        - multiplier
+        - is_paused
+      properties: 
+        real_time:
+          type: string
+          format: date-time
+          description: Текущие реальные дата и время
+          example: "2026-10-16T10:00:00+03:00"
+        virtual_time:
+          type: string
+          format: date-time
+          description: Текущее виртуальное время внутри системы
+          example: "2026-11-20T15:30:00+03:00"
+        multiplier: 
+          type: integer
+          description: Множитель времени (может быть только положительным)
+          minimum: 1
+          example: 1000
+        is_paused:
+          type: boolean
+          description: Флаг паузы симуляции генерации событий
+          example: false
+
+    UserBackgroundStartRequest:
+      type: object
+      required:
+        - user_id
+        - resource_type
+        - mode
+      properties:
+        user_id:
+          type: integer
+        resource_type:
+          type: string
+          enum: [TRAFFIC, MINUTES]
+        mode:
+          type: string
+          enum: [SIMPLE, REALISTIC]
+          description: Режим генерации. SIMPLE - через фиксированный интервал. REALISTIC - по суточному профилю потребления.
+        interval_seconds:
+          type: integer
+          description: Интервал между событиями в секундах (используется только в режиме SIMPLE)
+          example: 60
+        profile_type:
+          type: string
+          enum: [STANDARD, CUSTOM, TRIP]
+          description: Профиль для REALISTIC режима. TRIP имитирует минимальное потребление (поездка/роуминг).
+
+    UserBackgroundStopRequest:
+      type: object
+      required:
+        - user_id
+      properties:
+        user_id:
+          type: integer
+
+    GroupBackgroundStartRequest:
+      type: object
+      required:
+        - group_id
+        - resource_type
+        - mode
+      properties:
+        group_id:
+          type: integer
+        resource_type:
+          type: string
+          enum: [TRAFFIC, MINUTES]
+        mode:
+          type: string
+          enum: [SIMPLE, REALISTIC]
+          description: Режим генерации. SIMPLE - через фиксированный интервал. REALISTIC - по суточному профилю потребления.
+        interval_seconds:
+          type: integer
+          description: Интервал между событиями в секундах (используется только в режиме SIMPLE)
+          example: 60
+        profile_type:
+          type: string
+          enum: [STANDARD, CUSTOM, TRIP]
+          description: Профиль для REALISTIC режима. TRIP имитирует минимальное потребление (поездка/роуминг).
+
+    GroupBackgroundStopRequest:
+      type: object
+      required:
+        - group_id
+      properties:
+        group_id:
+          type: integer
+
+
+    ConsumeRequest:
+      type: object
+      required:
+        - user_id
+        - resource_type
+        - amount
+      properties: 
+        user_id:
+          type: integer
+        resource_type:
+          type: string
+          enum: [TRAFFIC, MINUTES]
+        amount:
+          type: number
+          format: double
+          description: Объем для мгновенного списания (в ГБ или минутах)
+          example: 5.5
+
+    DelayedRequest:
+      type: object
+      required:
+        - user_id
+        - resource_type
+        - amount
+        - hours_ago
+      properties: 
+        user_id:
+          type: integer
+        resource_type:
+          type: string
+          enum: [TRAFFIC, MINUTES]
+        amount:
+          type: number
+          format: double
+          description: Объем потребления
+          example: 1.2
+        hours_ago:
+          type: integer
+          description: На сколько часов назад от текущего виртуального времени произошло событие (для проверки BR-16)
+          example: 3
+
+    UserAnomalyRequest:
+      type: object
+      required: 
+        - user_id
+        - resource_type
+        - amount
+      properties: 
+        user_id:
+          type: integer
+        resource_type:
+          type: string
+          enum: [TRAFFIC, MINUTES]
+        amount:
+          type: number
+          format: double
+          description: Объем аномального скачка (например, 15% от лимита за 6 часов, согласно BR-15)
+          example: 15.0
