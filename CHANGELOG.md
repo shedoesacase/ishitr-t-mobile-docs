@@ -67,3 +67,20 @@
 	* Отредактирован альтернативный сценарий 5а в UC-02.
 * **Business_Requirements.md:**
 	* Дополнен BR-18.
+
+---
+
+## [0.2.2] — 20-10-2026
+### ➕ Добавлено
+* **Backend_Core_API.yaml:**
+	* Создан файл Backend_Core_API.yaml.
+	* Описаны эндпоинты апи бэкэнда.
+* **Generator_Service_API.yaml:**
+	* Создан файл Generator_Service_API.yaml.
+	* Описаны эндпоинты апи генератора.
+* **Broker_Events_Contract.yaml:**
+	* Создан файл Broker_Events_Contract.yaml.
+	* Описаны схемы сообщений для брокера.
+### 🔄 Изменено
+* **Generator-Backend_API.yaml:**
+	* Файл разбит на 3 отдельных файла и больше не существует.

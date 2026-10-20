@@ -1,0 +1,50 @@
+openapi: 3.0.3
+info:
+  title: Broker Events Contract
+  description: Схемы сообщений для Брокера. Генератор публикует, Backend -читает. REST API для этих действий не используется.
+  version: 19.10.2026
+
+components:
+  schemas:
+    ConsumptionEvent:
+      type: object
+      description: Универсальное событие потребления ресурса. Используется для фоновой генерации, мгновенных списаний и запоздалых событий.
+      required:
+        - event_id
+        - user_id
+        - resource_type
+        - amount
+        - event_timestamp
+      properties:
+        event_id:
+          type: string
+          format: uuid
+          description: Уникальный ID события (UUID). Критически важен для обеспечения идемпотентности на стороне Backend.
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        user_id:
+          type: integer
+          description: ID пользователя, совершившего потребление.
+          example: 123
+        resource_type:
+          type: string
+          enum: 
+            - TRAFFIC
+            - MINUTES
+          description: Тип расходуемого ресурса.
+          example: "TRAFFIC"
+        amount:
+          type: number
+          format: double
+          description: Объем потребления. Для TRAFFIC - в ГБ (например, 0.55). Для MINUTES - в минутах.
+          example: 1.25
+        event_timestamp:
+          type: string
+          format: date-time
+          description: виртуальное время, когда произошло событие. Именно это поле делает событие "запоздалым" (Delayed).  Если event_timestamp меньше текущего виртуального времени на момент чтения Бэкендом, Бэкенд применяет логику обработки запоздалых событий.
+          example: "2026-11-20T14:30:00+03:00"
+          
+        is_anomaly:
+          type: boolean
+          description: Флаг, указывающий, что событие сгенерировано в рамках сценария "Аномальный рост". Для обычных фоновых событий - false или отсутствует.
+          default: false
+          example: true

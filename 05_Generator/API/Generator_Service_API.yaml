@@ -1,0 +1,378 @@
+openapi: 3.0.3
+info:
+  title: Generator Service API
+  description: Внутреннее API генератора. Используется для админ-панели самого генератора.
+  version: 19.10.2026
+servers:
+  - url: http://localhost:8080
+  
+paths:
+  /api/v1/generator/time:
+    get:
+      summary: Получить текущий статус времени
+      description: Возвращает текущее реальное время, виртуальное время системы, текущий множитель ускорения и статус паузы.
+      tags:
+        - Управление временем
+      responses:
+        '200':
+          description: Успешный ответ со статусом времени
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TimeStatus'
+        '500':
+          description: Внутренняя ошибка сервера
+
+  /api/v1/generator/time/accelerate:
+    post:
+      summary: Ускорение времени на заданный коэффициент
+      description: Ускоряет класическое время в заданный множитель
+      tags: 
+        - Управление временем
+      requestBody: 
+        required: true
+        content: 
+          application/json: 
+            schema: 
+              $ref: '#/components/schemas/TimeAccelerateRequest'
+      responses: 
+        '200':
+          description: Время ускорено
+          content:
+            application/json: 
+              schema: 
+                $ref: '#/components/schemas/TimeStatus'
+        '400':
+          description: Ошибка валидации данных
+        '500':
+          description: Внутренняя ошибка сервера
+
+  /api/v1/generator/time/reset:
+    post:
+      summary: Возвращает время к классической скорости
+      tags:
+        - Управление временем
+      responses: 
+        '200':
+          description: Время успешно сброшено до стандартного
+          content: 
+            application/json: 
+              schema: 
+                $ref: '#/components/schemas/TimeStatus'
+        '400':
+          description: Ошибка валидации данных
+        '500':
+          description: Внутренняя ошибка сервера
+
+  /api/v1/generator/time/pause:
+    post:
+      summary: Останавливает течение времени в симуляции
+      tags:
+        - Управление временем
+      responses: 
+        '200':
+          description: Время успешно остановлено
+          content: 
+            application/json: 
+              schema: 
+                $ref: '#/components/schemas/TimeStatus'
+        '400':
+          description: Ошибка валидации данных
+        '500':
+          description: Внутренняя ошибка сервера
+
+  /api/v1/generator/time/resume:
+    post:
+      summary: Возобновляет течение времени в симуляции
+      tags:
+        - Управление временем
+      responses: 
+        '200':
+          description: Течение времени успешно возобновлено
+          content: 
+            application/json: 
+              schema: 
+                $ref: '#/components/schemas/TimeStatus'
+        '400':
+          description: Ошибка валидации данных
+        '500':
+          description: Внутренняя ошибка сервера
+
+  /api/v1/generator/events/background/user/start:
+    post:
+      summary: Запуск фонового потока генерации данных для отдельного пользователя
+      tags:
+        - События
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserBackgroundStartRequest'
+      responses:
+        '201':
+          description: Поток успешно запущен
+        '409':
+          description: Поток уже запущен
+        '400':
+          description: Ошибка валидации данных
+        '500':
+          description: Внутренняя ошибка сервера
+
+  /api/v1/generator/events/background/user/stop:
+    post:
+      summary: Остановка фонового потока генерации данных для отдельного пользователя
+      tags:
+        - События
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserBackgroundStopRequest'
+      responses:
+        '201':
+          description: Поток успешно остановлен
+        '409':
+          description: Поток уже был остановлен
+        '400':
+          description: Ошибка валидации данных
+        '500':
+          description: Внутренняя ошибка сервера
+
+  /api/v1/generator/events/background/group/start:
+    post:
+      summary: Запуск фонового потока генерации данных для отдельной группы
+      tags:
+        - События
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GroupBackgroundStartRequest'
+      responses:
+        '201':
+          description: Поток успешно запущен
+        '409':
+          description: Поток уже был запущен
+        '400':
+          description: Ошибка валидации данных
+        '500':
+          description: Внутренняя ошибка сервера
+
+  /api/v1/generator/events/background/group/stop:
+    post:
+      summary: Остановка фонового потока генерации данных для отдельной группы
+      tags:
+        - События
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GroupBackgroundStopRequest'
+      responses:
+        '201':
+          description: Поток успешно остановлен
+        '409':
+          description: Поток уже был остановлен
+        '400':
+          description: Ошибка валидации данных
+        '500':
+          description: Внутренняя ошибка сервера
+
+  /api/v1/generator/events/anomaly/user/start:
+    post:
+      summary: Запуск аномального скачка потребления для отдельного пользователя
+      description: Аномальный скачок потребления длится 6 виртуальных часов и, по истечении 6 часов, должен израсходовать заданное количество ресурса. Скорость расхода равна отношению объема требуемого расхода к 6. В случае, если ресурса меньше, чем задано (в запросе 15%, а по факту 10%), скорость сохраняется и событие автоматически останавливается по достижению конца трафика.
+      tags:
+        - События
+      requestBody:
+        required: true
+        content:
+          application/json: 
+            schema: 
+              $ref: '#/components/schemas/UserAnomalyStartRequest'
+      responses: 
+        '201':
+          description: Скачок запущен
+        '409':
+          description: Скачок уже был запущен
+        '400':
+          description: Ошибка валидации данных
+        '500':
+          description: Внутренняя ошибка сервера
+
+  /api/v1/generator/events/anomaly/user/stop:
+    post:
+      summary: Остановка аномального скачка потребления для отдельного пользователя
+      description: Останавливает событие в момент его активности, не отменяет последствия события.
+      tags:
+        - События
+      requestBody:
+        required: true
+        content:
+          application/json: 
+            schema: 
+              $ref: '#/components/schemas/UserAnomalyStopRequest'
+      responses: 
+        '201':
+          description: Скачок остановлен
+        '409':
+          description: Скачок уже был остановлен
+        '400':
+          description: Ошибка валидации данных
+        '500':
+          description: Внутренняя ошибка сервера
+
+components:
+  schemas:
+    TimeStatus:
+      type: object
+      required: 
+        - real_time
+        - virtual_time
+        - multiplier
+        - is_paused
+      properties: 
+        real_time:
+          type: string
+          format: date-time
+          description: Текущие реальные дата и время
+          example: "2026-10-16T10:00:00+03:00"
+        virtual_time:
+          type: string
+          format: date-time
+          description: Текущее виртуальное время внутри системы
+          example: "2026-11-20T15:30:00+03:00"
+        multiplier: 
+          type: integer
+          description: Множитель времени (может быть только положительным)
+          minimum: 1
+          example: 1000
+        is_paused:
+          type: boolean
+          description: Флаг паузы симуляции генерации событий
+          example: false
+
+    UserBackgroundStartRequest:
+      type: object
+      required:
+        - user_id
+        - resource_type
+        - mode
+      properties:
+        user_id:
+          type: integer
+        resource_type:
+          type: string
+          enum: [TRAFFIC, MINUTES]
+        mode:
+          type: string
+          enum: [SIMPLE, REALISTIC]
+          description: Режим генерации. SIMPLE - через фиксированный интервал. REALISTIC - по суточному профилю потребления.
+        interval_seconds:
+          type: integer
+          description: Интервал между событиями в секундах (используется только в режиме SIMPLE)
+          example: 60
+        profile_type:
+          type: string
+          enum: [STANDARD, CUSTOM, TRIP]
+          description: Профиль для REALISTIC режима. TRIP имитирует минимальное потребление (поездка/роуминг).
+        custom_profile:
+          type: array
+          items:
+            type: number
+            minimum: 0
+            maximum: 1
+          minItems: 24
+          maxItems: 24
+          description: Коэффициенты потребления для каждого из 24 часов суток (только для CUSTOM)
+
+    UserBackgroundStopRequest:
+      type: object
+      required:
+        - user_id
+      properties:
+        user_id:
+          type: integer
+
+    GroupBackgroundStartRequest:
+      type: object
+      required:
+        - group_id
+        - resource_type
+        - mode
+      properties:
+        group_id:
+          type: integer
+        resource_type:
+          type: string
+          enum: [TRAFFIC, MINUTES]
+        mode:
+          type: string
+          enum: [SIMPLE, REALISTIC]
+          description: Режим генерации. SIMPLE - через фиксированный интервал. REALISTIC - по суточному профилю потребления.
+        interval_seconds:
+          type: integer
+          description: Интервал между событиями в секундах (используется только в режиме SIMPLE)
+          example: 60
+        profile_type:
+          type: string
+          enum: [STANDARD, CUSTOM, TRIP]
+          description: Профиль для REALISTIC режима. TRIP имитирует минимальное потребление (поездка/роуминг).
+        custom_profile:
+          type: array
+          items:
+            type: number
+            minimum: 0
+            maximum: 1
+          minItems: 24
+          maxItems: 24
+          description: Коэффициенты потребления для каждого из 24 часов суток (только для CUSTOM)
+
+    GroupBackgroundStopRequest:
+      type: object
+      required:
+        - group_id
+      properties:
+        group_id:
+          type: integer
+
+    UserAnomalyStartRequest:
+      type: object
+      required: 
+        - user_id
+        - resource_type
+        - amount
+      properties: 
+        user_id:
+          type: integer
+        resource_type:
+          type: string
+          enum: [TRAFFIC, MINUTES]
+        amount:
+          type: number
+          format: double
+          description: Абсолютный объем ресурса (в ГБ или минутах), который должен быть израсходован. Генератор сам рассчитывает это число как 15% от лимита пользователя перед отправкой запроса.
+          example: 15.0
+        
+
+    UserAnomalyStopRequest:
+      type: object
+      required: 
+        - user_id
+      properties: 
+        user_id:
+          type: integer
+
+    TimeAccelerateRequest:
+      type: object
+      required: 
+        - multiplier
+      properties: 
+        multiplier:
+          type: integer
+          minimum: 1
+          description: Множитель стандартного времени (не текущего). Предположим, текущее время в системе ускорено в 5 раз. Данный множитель означает, что при передаче 10, система будет ускорена в 10 раз по сравнению со стандартным временем, а не в 50.
