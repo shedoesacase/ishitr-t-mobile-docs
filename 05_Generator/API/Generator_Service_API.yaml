@@ -140,47 +140,6 @@ paths:
         '500':
           description: Внутренняя ошибка сервера
 
-  /api/v1/generator/events/background/group/start:
-    post:
-      summary: Запуск фонового потока генерации данных для отдельной группы
-      tags:
-        - События
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/GroupBackgroundStartRequest'
-      responses:
-        '201':
-          description: Поток успешно запущен
-        '409':
-          description: Поток уже был запущен
-        '400':
-          description: Ошибка валидации данных
-        '500':
-          description: Внутренняя ошибка сервера
-
-  /api/v1/generator/events/background/group/stop:
-    post:
-      summary: Остановка фонового потока генерации данных для отдельной группы
-      tags:
-        - События
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/GroupBackgroundStopRequest'
-      responses:
-        '201':
-          description: Поток успешно остановлен
-        '409':
-          description: Поток уже был остановлен
-        '400':
-          description: Ошибка валидации данных
-        '500':
-          description: Внутренняя ошибка сервера
 
   /api/v1/generator/events/anomaly/user/start:
     post:
@@ -221,6 +180,30 @@ paths:
           description: Скачок остановлен
         '409':
           description: Скачок уже был остановлен
+        '400':
+          description: Ошибка валидации данных
+        '500':
+          description: Внутренняя ошибка сервера
+  
+  /api/v1/generator/events/background/all/start:
+    post:
+      summary: Запуск массовой фоновой генерации для всех пользователей
+      description: Запускает фоновую генерацию одновременно для всех активных пользователей в системе.
+      tags:
+        - События
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AllUsersBackgroundStartRequest'
+      responses:
+        '200':
+          description: Массовая генерация успешно обработана
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MassGenerationStartResponse'
         '400':
           description: Ошибка валидации данных
         '500':
@@ -298,67 +281,18 @@ components:
         user_id:
           type: integer
 
-    GroupBackgroundStartRequest:
-      type: object
-      required:
-        - group_id
-        - resource_type
-        - mode
-      properties:
-        group_id:
-          type: integer
-        resource_type:
-          type: string
-          enum: [TRAFFIC, MINUTES]
-        mode:
-          type: string
-          enum: [SIMPLE, REALISTIC]
-          description: Режим генерации. SIMPLE - через фиксированный интервал. REALISTIC - по суточному профилю потребления.
-        interval_seconds:
-          type: integer
-          description: Интервал между событиями в секундах (используется только в режиме SIMPLE)
-          example: 60
-        profile_type:
-          type: string
-          enum: [STANDARD, CUSTOM, TRIP]
-          description: Профиль для REALISTIC режима. TRIP имитирует минимальное потребление (поездка/роуминг).
-        custom_profile:
-          type: array
-          items:
-            type: number
-            minimum: 0
-            maximum: 1
-          minItems: 24
-          maxItems: 24
-          description: Коэффициенты потребления для каждого из 24 часов суток (только для CUSTOM)
-
-    GroupBackgroundStopRequest:
-      type: object
-      required:
-        - group_id
-      properties:
-        group_id:
-          type: integer
-
     UserAnomalyStartRequest:
       type: object
       required: 
         - user_id
         - resource_type
-        - amount
       properties: 
         user_id:
           type: integer
         resource_type:
           type: string
           enum: [TRAFFIC, MINUTES]
-        amount:
-          type: number
-          format: double
-          description: Абсолютный объем ресурса (в ГБ или минутах), который должен быть израсходован. Генератор сам рассчитывает это число как 15% от лимита пользователя перед отправкой запроса.
-          example: 15.0
         
-
     UserAnomalyStopRequest:
       type: object
       required: 
@@ -376,3 +310,46 @@ components:
           type: integer
           minimum: 1
           description: Множитель стандартного времени (не текущего). Предположим, текущее время в системе ускорено в 5 раз. Данный множитель означает, что при передаче 10, система будет ускорена в 10 раз по сравнению со стандартным временем, а не в 50.
+
+    AllUsersBackgroundStartRequest:
+      type: object
+      required:
+        - resource_type
+        - mode
+      properties:
+        resource_type:
+          type: string
+          enum: [TRAFFIC, MINUTES]
+        mode:
+          type: string
+          enum: [SIMPLE, REALISTIC]
+        interval_seconds:
+          type: integer
+          description: Интервал между событиями в секундах. Обязательно, если mode = SIMPLE.
+          minimum: 1
+          example: 60
+        profile_type:
+          type: string
+          enum: [STANDARD, TRIP]
+          description: Профиль для REALISTIC режима. TRIP имитирует минимальное потребление (поездка/роуминг).
+
+    MassGenerationStartResponse:
+      type: object
+      description: Результат попытки запуска массовой генерации
+      properties:
+        total_active_users:
+          type: integer
+          description: Общее количество активных пользователей, найденных в системе
+          example: 10
+        started_count:
+          type: integer
+          description: Количество пользователей, для которых генерация была успешно запущена
+          example: 7
+        ignored_count:
+          type: integer
+          description: Количество пользователей, которые были проигнорированы, так как у них уже есть активная генерация (фоновая или аномалия)
+          example: 3
+        message:
+          type: string
+          description: Человеко-читаемое сообщение для отображения в UI (toast)
+          example: "Массовая генерация запущена для 7 пользователей. 3 пользователя проигнорированы (уже активны)."

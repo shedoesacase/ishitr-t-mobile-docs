@@ -48,3 +48,44 @@ components:
           description: Флаг, указывающий, что событие сгенерировано в рамках сценария "Аномальный рост". Для обычных фоновых событий - false или отсутствует.
           default: false
           example: true
+
+    TimeChangeEvent:
+      type: object
+      description: Событие изменения параметров виртуального времени. Публикуется Генератором при ускорении, паузе, возобновлении или сбросе времени.
+      required:
+        - event_id
+        - base_real_time
+        - base_virtual_time
+        - multiplier
+        - is_paused
+        - changed_at
+      properties:
+        event_id:
+          type: string
+          format: uuid
+          description: Уникальный ID события изменения времени
+          example: "660e8400-e29b-41d4-a716-446655440001"
+        base_real_time:
+          type: string
+          format: date-time
+          description: Реальное время, когда была зафиксирована база
+          example: "2026-10-16T10:00:00+03:00"
+        base_virtual_time:
+          type: string
+          format: date-time
+          description: Виртуальное время в эту базу
+          example: "2026-11-20T15:30:00+03:00"
+        multiplier:
+          type: integer
+          description: Текущий множитель ускорения
+          minimum: 1
+          example: 1000
+        is_paused:
+          type: boolean
+          description: Флаг паузы симуляции
+          example: false
+        changed_at:
+          type: string
+          format: date-time
+          description: Виртуальное время, когда произошло изменение
+          example: "2026-11-20T15:30:00+03:00"
