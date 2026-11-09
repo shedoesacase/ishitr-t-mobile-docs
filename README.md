@@ -2,7 +2,7 @@
 
 [![Status](https://img.shields.io/badge/Status-In%20Progress-yellow)]()
 [![Role](https://img.shields.io/badge/Role-System%20Analyst-blue)]()
-[![Docs Version](https://img.shields.io/badge/Docs-v0.2.2-orange)]()
+[![Docs Version](https://img.shields.io/badge/Docs-v0.2.3-orange)]()
 [![License](https://img.shields.io/badge/License-MIT-green)]()
 
 > Командный проект в рамках ИШИТР+. Мобильное приложение и бэкенд для управления семейной группой, контроля тарифов, настройки лимитов и отслеживания потребления ресурсов (трафик, минуты) участниками в экосистеме Т-мобайл.
@@ -20,6 +20,7 @@
 | 🔗 [generator]()                                                           | Генератор событий                        |   @Razil131    | 🟡 В разработке |
 | 🔗 [docs](https://github.com/shedoesacase/ishitr-t-mobile-docs)            | Документация и аналитика                 | @shedoesacase  | 🟡 В разработке |
 | 🔗 [UI-design](https://www.figma.com/design/Vg9FhhgPwqxbpGrfI4Sdjy)        | Дизайн мобильного приложения             |  @Zandaru117   | 🟡 В разработке |
+| 🔗 [tests](https://github.com/Zandaru117/ishitr-t-mobile-tests)            | Тестирование                             |  @Zandaru117   | 🟡 В разработке |
 
 ---
 
@@ -63,7 +64,7 @@
 
 ## 🛠 Инструменты и стандарты
 
-- **Моделирование:** Draw.io (`.drawio` + экспорт в `.svg` для рендера в GitHub).
+- **Моделирование:** Draw.io (`.drawio` + экспорт в `.svg` для рендера в GitHub), mermaid для диаграмм последовательности.
 - **Версионирование:** Семантическое версионирование документации + ведение [`CHANGELOG.md`](./CHANGELOG.md).
 
 ---
@@ -76,7 +77,7 @@
 - **26-09-2026**: Добавление README, CHANGELOG, уточнение словаря данных.
 - **29-09-2026:** Добавлено описание базы данных. (См. CHANGELOG v. 0.2.0)
 - **16-10-2026:** Добавлено описание концепции генератора и его API. (См. CHANGELOG v. 0.2.1)
-- **19-10-2026:** Закончено API генератора (См. CHANGELOG v. 0.3.0).
+- **19-10-2026:** Закончено API генератора (См. CHANGELOG v. 0.2.2).
 
 ---
 

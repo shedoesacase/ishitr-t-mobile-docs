@@ -4,7 +4,7 @@ info:
   description: Внутреннее API генератора. Используется для админ-панели самого генератора.
   version: 19.10.2026
 servers:
-  - url: http://localhost:8080
+  - url: http://localhost:8082
   
 paths:
   /api/v1/generator/time:
@@ -209,6 +209,104 @@ paths:
         '500':
           description: Внутренняя ошибка сервера
 
+  /api/v1/generator/events/instant-deduct:
+    post:
+      summary: Мгновенное списание ресурсов
+      description: Публикует одно событие потребления с текущим виртуальным временем и is_anomaly=false.
+      tags:
+        - События
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InstantDeductRequest'
+      responses:
+        '200':
+          description: Событие опубликовано
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: published
+                  event_id:
+                    type: string
+                    format: uuid
+                  user_id:
+                    type: integer
+                  resource_type:
+                    type: string
+                  amount:
+                    type: number
+                  event_timestamp:
+                    type: string
+                    format: date-time
+        '400':
+          description: Ошибка валидации данных
+        '500':
+          description: Внутренняя ошибка сервера
+
+  /api/v1/generator/events/delayed:
+    post:
+      summary: Отправка запоздалого события
+      description: Публикует событие с event_timestamp = текущее виртуальное время − hoursAgo часов.
+      tags:
+        - События
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DelayedEventRequest'
+      responses:
+        '200':
+          description: Запоздалое событие опубликовано
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: published
+                  event_id:
+                    type: string
+                    format: uuid
+                  user_id:
+                    type: integer
+                  resource_type:
+                    type: string
+                  amount:
+                    type: number
+                  event_timestamp:
+                    type: string
+                    format: date-time
+                  hours_ago:
+                    type: integer
+        '400':
+          description: Ошибка валидации данных
+        '500':
+          description: Внутренняя ошибка сервера
+
+  /api/v1/generator/events/background/status:
+    get:
+      summary: Получить статус всех активных генераций
+      description: Возвращает список всех активных задач генерации, включая фоновые генерации и аномалии. Используется UI для отображения таблицы «Активные генерации» и автоматического polling-обновления.
+      tags:
+        - События
+      responses:
+        '200':
+          description: Список активных задач генерации
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenerationStatusResponse'
+        '500':
+          description: Внутренняя ошибка сервера
+
 components:
   schemas:
     TimeStatus:
@@ -261,25 +359,21 @@ components:
           example: 60
         profile_type:
           type: string
-          enum: [STANDARD, CUSTOM, TRIP]
+          enum: [STANDARD, TRIP]
           description: Профиль для REALISTIC режима. TRIP имитирует минимальное потребление (поездка/роуминг).
-        custom_profile:
-          type: array
-          items:
-            type: number
-            minimum: 0
-            maximum: 1
-          minItems: 24
-          maxItems: 24
-          description: Коэффициенты потребления для каждого из 24 часов суток (только для CUSTOM)
 
     UserBackgroundStopRequest:
       type: object
       required:
         - user_id
+        - resource_type
       properties:
         user_id:
           type: integer
+        resource_type:
+          type: string
+          enum: [TRAFFIC, MINUTES]
+          description: Тип ресурса, для которого останавливается генерация
 
     UserAnomalyStartRequest:
       type: object
@@ -353,3 +447,92 @@ components:
           type: string
           description: Человеко-читаемое сообщение для отображения в UI (toast)
           example: "Массовая генерация запущена для 7 пользователей. 3 пользователя проигнорированы (уже активны)."
+
+    InstantDeductRequest:
+      type: object
+      required:
+        - user_id
+        - resource_type
+        - amount
+      properties:
+        user_id:
+          type: integer
+        resource_type:
+          type: string
+          enum: [TRAFFIC, MINUTES]
+        amount:
+          type: number
+          description: Объём списания (ГБ для TRAFFIC, минуты для MINUTES)
+          example: 0.5
+
+    DelayedEventRequest:
+      type: object
+      required:
+        - user_id
+        - resource_type
+        - amount
+        - hours_ago
+      properties:
+        user_id:
+          type: integer
+        resource_type:
+          type: string
+          enum: [TRAFFIC, MINUTES]
+        amount:
+          type: number
+          description: Объём потребления (ГБ для TRAFFIC, минуты для MINUTES)
+          example: 0.1
+        hours_ago:
+          type: integer
+          minimum: 1
+          description: На сколько часов назад должно быть датировано событие
+          example: 3
+
+    GenerationStatusResponse:
+      type: object
+      required:
+        - active_tasks
+      properties:
+        active_tasks:
+          type: array
+          description: Список всех активных задач генерации (фоновые и аномалии)
+          items:
+            $ref: '#/components/schemas/TaskInfo'
+
+    TaskInfo:
+      type: object
+      required:
+        - user_id
+        - resource_type
+        - task_type
+      properties:
+        user_id:
+          type: integer
+          description: ID пользователя
+          example: 123
+        resource_type:
+          type: string
+          enum: [TRAFFIC, MINUTES]
+          description: Тип ресурса
+          example: TRAFFIC
+        mode:
+          type: string
+          enum: [SIMPLE, REALISTIC]
+          nullable: true
+          description: Режим генерации. Null для аномалий.
+          example: SIMPLE
+        profile_type:
+          type: string
+          enum: [STANDARD, TRIP]
+          nullable: true
+          description: Профиль генерации. Null для аномалий и SIMPLE режима.
+          example: STANDARD
+        interval_seconds:
+          type: integer
+          description: Интервал между событиями в секундах. 0 для аномалий.
+          example: 60
+        task_type:
+          type: string
+          enum: [BACKGROUND, ANOMALY]
+          description: Тип задачи. BACKGROUND — фоновая генерация, ANOMALY — аномальный скачок потребления.
+          example: BACKGROUND

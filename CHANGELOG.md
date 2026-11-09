@@ -6,38 +6,21 @@
 
 ## Неопубликованное
 ### ➕ Добавлено
-* **Background_Generation_Event_Processing_Sequence_Diagram.md:**
-	* Описана диаграмма последовательности обработки события потребления и фоновой генерации
-* **Anomaly_Generation_Sequence_Diagram.md:**
-	* Описана диаграмма последовательности обработки события аномального потребления.
-* **Dashboard_Data_Loading_Sequence_Diagrammd:**
-	* Описана диаграмма последовательности загрузки дашборда в админ-панели.
-* **Delayed_Event_Processing_Sequence_Diagram.md:**
-	* Описана диаграмма последовательности обработки запоздалого события.
-* **Instant_Event_Generation_Sequence_Diagram.md:**
-	* Описана диаграмма последовательности обработки мгновенного события.
-* **Virtual_Clock_Synchronization_Sequence_Diagram.md:**
-	* Описана диаграмма последовательности синхронизации времени между микросервисами.
-* **Generator_UI_Scenarios.md:**
-	* Подробно описаны сценарии использования генератора для создания web-страницы админ-панели.
-* Добавлены диаграммы в нотации C4 для уровней Context и Containers
-### 🔄 Изменено
-* **Generator_Concept_and_Architecture.md:**
-	- Описаны подробно сценарии
-* **Use_Cases.md:**
-	* Изменен UC-16: Добавлен альтернативный сценарий 4c.
-* **Data_Dictionary.md:**
-	* Добавлено поле name в таблицу user.
-* **Generator_Concept_and_Architecture.md:**
-	* Добавлено описание периодической генерации данных.
-	* Добавлено уточнение о том, что время в системе связано по средствам брокера сообщений.
-	* Добавлено описание массовой генерации.
-* **Generator_Service_API.yaml:**
-	* Обновлены методы генерации данных.
-	* Добавлен метод мгновенного списания данных.
-* **Broker_Events_Contract.yaml:**
-	* Добавлена схема сообщения для брокера с изменением времени, связывающее время в генераторе и на бэкэнде.
+- **Backend_Core_API.yaml:**
+	- Добавлен эндпоинт `GET /api/v1/users/active` для получения списка ID активных пользователей (используется Generator-ом для массового старта).
+- **Generator_Service_API.yaml:**
+	- Добавлен эндпоинт `POST /api/v1/generator/events/instant-deduct` для мгновенного списания ресурсов.
+	- Добавлен эндпоинт `POST /api/v1/generator/events/delayed` для отправки запоздалых событий.
+	- Добавлен эндпоинт `GET /api/v1/generator/events/background/status` для получения статуса всех активных генераций.
+	- Добавлены схемы: `InstantDeductRequest`, `DelayedEventRequest`, `GenerationStatusResponse`, `TaskInfo`.
 
+### 🔄 Изменено
+- **Data_Dictionary.md**
+	- Добавлены новые поля в таблицу AuthCode
+- **Generator_Service_API.yaml:**
+	- Порт сервера изменён с `8080` на `8082`.
+	- Удалено значение `CUSTOM` из enum `profile_type` и поле `custom_profile` в схеме `UserBackgroundStartRequest`.
+	- В схему `UserBackgroundStopRequest` добавлено обязательное поле `resource_type`.
 ---
 
 ## [0.1.0] — 25-09-2026
@@ -114,3 +97,37 @@
 ### 🔄 Изменено
 * **Generator-Backend_API.yaml:**
 	* Файл разбит на 3 отдельных файла и больше не существует.
+
+## [0.2.3] — 01-11-2026
+### ➕ Добавлено
+* **Background_Generation_Event_Processing_Sequence_Diagram.md:**
+	* Описана диаграмма последовательности обработки события потребления и фоновой генерации
+* **Anomaly_Generation_Sequence_Diagram.md:**
+	* Описана диаграмма последовательности обработки события аномального потребления.
+* **Dashboard_Data_Loading_Sequence_Diagrammd:**
+	* Описана диаграмма последовательности загрузки дашборда в админ-панели.
+* **Delayed_Event_Processing_Sequence_Diagram.md:**
+	* Описана диаграмма последовательности обработки запоздалого события.
+* **Instant_Event_Generation_Sequence_Diagram.md:**
+	* Описана диаграмма последовательности обработки мгновенного события.
+* **Virtual_Clock_Synchronization_Sequence_Diagram.md:**
+	* Описана диаграмма последовательности синхронизации времени между микросервисами.
+* **Generator_UI_Scenarios.md:**
+	* Подробно описаны сценарии использования генератора для создания web-страницы админ-панели.
+* Добавлены диаграммы в нотации C4 для уровней Context и Containers
+### 🔄 Изменено
+* **Generator_Concept_and_Architecture.md:**
+	- Описаны подробно сценарии
+* **Use_Cases.md:**
+	* Изменен UC-16: Добавлен альтернативный сценарий 4c.
+* **Data_Dictionary.md:**
+	* Добавлено поле name в таблицу user.
+* **Generator_Concept_and_Architecture.md:**
+	* Добавлено описание периодической генерации данных.
+	* Добавлено уточнение о том, что время в системе связано по средствам брокера сообщений.
+	* Добавлено описание массовой генерации.
+* **Generator_Service_API.yaml:**
+	* Обновлены методы генерации данных.
+	* Добавлен метод мгновенного списания данных.
+* **Broker_Events_Contract.yaml:**
+	* Добавлена схема сообщения для брокера с изменением времени, связывающее время в генераторе и на бэкэнде.

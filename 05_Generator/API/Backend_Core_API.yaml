@@ -112,6 +112,26 @@ paths:
         '500':
           description: Внутренняя ошибка сервера
 
+  /api/v1/users/active:
+    get:
+      summary: Получить список ID активных пользователей
+      description: Возвращает массив идентификаторов пользователей, для которых можно запускать генерацию. Используется Generator-ом для массового старта.
+      tags:
+        - Пользователи и Группы
+      responses:
+        '200':
+          description: Успешный ответ со списком ID
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: integer
+                  format: int64
+                example: [1, 2, 3]
+        '500':
+          description: Внутренняя ошибка сервера
+
   /api/v1/users/{user_id}:
     get:
       summary: Получить одного пользователя по ID
