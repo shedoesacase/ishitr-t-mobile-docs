@@ -22,6 +22,10 @@ paths:
                 $ref: '#/components/schemas/TimeStatus'
         '500':
           description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /api/v1/generator/time/accelerate:
     post:
@@ -44,8 +48,16 @@ paths:
                 $ref: '#/components/schemas/TimeStatus'
         '400':
           description: Ошибка валидации данных
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '500':
           description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /api/v1/generator/time/reset:
     post:
@@ -61,8 +73,16 @@ paths:
                 $ref: '#/components/schemas/TimeStatus'
         '400':
           description: Ошибка валидации данных
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '500':
           description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /api/v1/generator/time/pause:
     post:
@@ -78,8 +98,16 @@ paths:
                 $ref: '#/components/schemas/TimeStatus'
         '400':
           description: Ошибка валидации данных
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '500':
           description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /api/v1/generator/time/resume:
     post:
@@ -95,8 +123,16 @@ paths:
                 $ref: '#/components/schemas/TimeStatus'
         '400':
           description: Ошибка валидации данных
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '500':
           description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /api/v1/generator/events/background/user/start:
     post:
@@ -114,10 +150,22 @@ paths:
           description: Поток успешно запущен
         '409':
           description: Поток уже запущен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '400':
           description: Ошибка валидации данных
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '500':
           description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /api/v1/generator/events/background/user/stop:
     post:
@@ -135,10 +183,22 @@ paths:
           description: Поток успешно остановлен
         '409':
           description: Поток уже был остановлен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '400':
           description: Ошибка валидации данных
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '500':
           description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
 
   /api/v1/generator/events/anomaly/user/start:
@@ -158,10 +218,22 @@ paths:
           description: Скачок запущен
         '409':
           description: Скачок уже был запущен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '400':
           description: Ошибка валидации данных
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '500':
           description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /api/v1/generator/events/anomaly/user/stop:
     post:
@@ -180,10 +252,22 @@ paths:
           description: Скачок остановлен
         '409':
           description: Скачок уже был остановлен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '400':
           description: Ошибка валидации данных
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '500':
           description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   
   /api/v1/generator/events/background/all/start:
     post:
@@ -206,8 +290,16 @@ paths:
                 $ref: '#/components/schemas/MassGenerationStartResponse'
         '400':
           description: Ошибка валидации данных
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '500':
           description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /api/v1/generator/events/instant-deduct:
     post:
@@ -246,8 +338,16 @@ paths:
                     format: date-time
         '400':
           description: Ошибка валидации данных
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '500':
           description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /api/v1/generator/events/delayed:
     post:
@@ -288,8 +388,16 @@ paths:
                     type: integer
         '400':
           description: Ошибка валидации данных
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '500':
           description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /api/v1/generator/events/background/status:
     get:
@@ -306,6 +414,10 @@ paths:
                 $ref: '#/components/schemas/GenerationStatusResponse'
         '500':
           description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
 components:
   schemas:
@@ -536,3 +648,42 @@ components:
           enum: [BACKGROUND, ANOMALY]
           description: Тип задачи. BACKGROUND — фоновая генерация, ANOMALY — аномальный скачок потребления.
           example: BACKGROUND
+
+    ErrorResponse:
+      type: object
+      required:
+        - error_code
+        - message
+        - timestamp
+      properties:
+        error_code:
+          type: string
+          description: |
+            Машинно-читаемый код ошибки (константа). 
+            Используется клиентом для программной обработки (показать нужное сообщение, повторить запрос и т.д.)
+          example: "VALIDATION_ERROR"
+        message:
+          type: string
+          description: Человекочитаемое описание ошибки для логирования или вывода в UI
+          example: "Ошибка валидации данных"
+        timestamp:
+          type: string
+          format: date-time
+          description: Время возникновения ошибки (в виртуальном времени системы)
+          example: "2026-11-15T14:30:00+03:00"
+        trace_id:
+          type: string
+          description: |
+            Уникальный ID запроса для поиска в логах сервиса.
+            Критически важен для отладки.
+          example: "gen-a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+        details:
+          type: object
+          description: |
+            Дополнительные детали ошибки. Например, список полей, которые не прошли валидацию.
+            Структура зависит от конкретной ошибки.
+          additionalProperties: true
+          example: 
+            invalid_fields:
+              - field: "multiplier"
+                reason: "Должен быть больше 0"

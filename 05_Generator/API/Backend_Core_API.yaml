@@ -23,8 +23,16 @@ paths:
           description: Тариф успешно создан
         '400':
           description: Ошибка валидации данных
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '500':
           description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
     get:
       summary: Получить список всех тарифов
@@ -42,6 +50,10 @@ paths:
                   $ref: '#/components/schemas/ServicePackage'
         '500':
           description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /api/v1/tariffs/{package_id}:
     get:
@@ -65,8 +77,16 @@ paths:
                 $ref: '#/components/schemas/ServicePackage'
         '404':
           description: Тариф не найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '500':
           description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
 
   /api/v1/users:
@@ -90,10 +110,22 @@ paths:
                 $ref: '#/components/schemas/User'
         '400':
           description: Ошибка валидации данных
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '409':
           description: Такой номер телефона уже зарегестрирован в системе
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '500':
           description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
           
     get:
       summary: Получить список всех пользователей
@@ -111,6 +143,10 @@ paths:
                   $ref: '#/components/schemas/User'
         '500':
           description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /api/v1/users/active:
     get:
@@ -131,6 +167,10 @@ paths:
                 example: [1, 2, 3]
         '500':
           description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /api/v1/users/{user_id}:
     get:
@@ -154,8 +194,16 @@ paths:
                 $ref: '#/components/schemas/User'
         '404':
           description: Пользователь не найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '500':
           description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /api/v1/groups:
     get:
@@ -174,6 +222,10 @@ paths:
                   $ref: '#/components/schemas/FamilyGroup'
         '500':
           description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
     post:
       summary: Создать новую семейную группу
@@ -197,8 +249,16 @@ paths:
                   $ref: '#/components/schemas/FamilyGroup'
         '400':
           description: Ошибка валидации данных
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '500':
           description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /api/v1/groups/{group_id}:
     get:
@@ -222,8 +282,16 @@ paths:
                 $ref: '#/components/schemas/FamilyGroup'
         '404':
           description: Группа не найдена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '500':
           description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
 components:
   schemas:
@@ -373,4 +441,43 @@ components:
           maxItems: 3
           uniqueItems: true
           description: Список участников, которых можно добавить в группу
+
+    ErrorResponse:
+      type: object
+      required:
+        - error_code
+        - message
+        - timestamp
+      properties:
+        error_code:
+          type: string
+          description: |
+            Машинно-читаемый код ошибки (константа). 
+            Используется клиентом для программной обработки (показать нужное сообщение, повторить запрос и т.д.)
+          example: "USER_ALREADY_EXISTS"
+        message:
+          type: string
+          description: Человекочитаемое описание ошибки для логирования или вывода в UI
+          example: "Пользователь с таким номером телефона уже зарегистрирован"
+        timestamp:
+          type: string
+          format: date-time
+          description: Время возникновения ошибки (в виртуальном времени системы)
+          example: "2026-11-15T14:30:00+03:00"
+        trace_id:
+          type: string
+          description: |
+            Уникальный ID запроса для поиска в логах Backend'а. 
+            Критически важен для отладки.
+          example: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+        details:
+          type: object
+          description: |
+            Дополнительные детали ошибки. Например, список полей, которые не прошли валидацию.
+            Структура зависит от конкретной ошибки.
+          additionalProperties: true
+          example: 
+            invalid_fields:
+              - field: "phone_number"
+                reason: "Неверный формат международного номера"
             

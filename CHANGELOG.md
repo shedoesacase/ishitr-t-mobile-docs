@@ -15,6 +15,12 @@
 	- Добавлены схемы: `InstantDeductRequest`, `DelayedEventRequest`, `GenerationStatusResponse`, `TaskInfo`.
 
 ### 🔄 Изменено
+- **Backend_Core_API.yaml:**
+	- Все ответы с кодами `400`, `404`, `409`, `500` теперь содержат унифицированную структуру тела ошибки через `$ref: '#/components/schemas/ErrorResponse'`.
+	- Добавлена схема `ErrorResponse` в `components/schemas` с полями `error_code`, `message`, `timestamp`, `trace_id`, `details`.
+- **Generator_Service_API.yaml:**
+	- Все ответы с кодами `400`, `409`, `500` во всех эндпоинтах секции «События» и «Управление временем» теперь содержат унифицированную структуру тела ошибки через `$ref: '#/components/schemas/ErrorResponse'`.
+	- Добавлена схема `ErrorResponse` в `components/schemas` с полями `error_code`, `message`, `timestamp`, `trace_id`, `details`.
 - **Data_Dictionary.md**
 	- Добавлены новые поля в таблицу AuthCode
 - **Generator_Service_API.yaml:**
