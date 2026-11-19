@@ -17,7 +17,7 @@
 | :------------------------------------------------------------------------- | :--------------------------------------- | :------------: | :-------------: |
 | 🔗 [android-app](https://github.com/pomidorchik03/ishitr-t-mobile-android) | Мобильное приложение (Android)           | @pomidorchik03 | 🟡 В разработке |
 | 🔗 [backend](https://github.com/Razil131/ishitr-t-mobile-backend)          | Основной микросервис управления тарифами |   @Razil131    | 🟡 В разработке |
-| 🔗 [generator]()                                                           | Генератор событий                        |   @Razil131    |    🟢 Готово    |
+| 🔗 [generator](https://github.com/Razil131/ishitr-t-mobile-generator)      | Генератор событий                        |   @Razil131    |    🟢 Готово    |
 | 🔗 [docs](https://github.com/shedoesacase/ishitr-t-mobile-docs)            | Документация и аналитика                 | @shedoesacase  | 🟡 В разработке |
 | 🔗 [UI-design](https://www.figma.com/design/Vg9FhhgPwqxbpGrfI4Sdjy)        | Дизайн мобильного приложения             |  @Zandaru117   | 🟡 В разработке |
 | 🔗 [tests](https://github.com/Zandaru117/ishitr-t-mobile-tests)            | Тестирование                             |  @Zandaru117   | 🟡 В разработке |

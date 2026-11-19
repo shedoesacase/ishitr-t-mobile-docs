@@ -1,10 +1,17 @@
 openapi: 3.0.3
 info:
   title: Backend Core API
-  description: Основной API бэкэнда.
+  description: |
+    Основной API бэкэнда.
+    
+    Аутентификация: Все запросы требуют валидный JWT-токен в заголовке Authorization: Bearer <token>.
+    Токен должен содержать user_id и role.
   version: 19.10.2026
 servers:
   - url: http://localhost:8080
+
+security:
+  - BearerAuth: []
 
 paths:
   /api/v1/tariffs:
@@ -208,9 +215,9 @@ paths:
   /api/v1/groups:
     get:
       summary: Получить список всех семейных групп
-      description: Возвращает массив всех созданных групп для отображения на дашборде.
+      description: Возвращает массив всех созданных групп для отображения на дашборде. Доступно любым аутентифицированным пользователям.
       tags:
-        - Пользователи и Группы
+        - Семейные группы
       responses:
         '200':
           description: Успешный ответ со списком групп
@@ -220,6 +227,12 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/FamilyGroup'
+        '401':
+          description: Неавторизованный запрос (токен отсутствует или невалиден)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '500':
           description: Внутренняя ошибка сервера
           content:
@@ -229,14 +242,17 @@ paths:
 
     post:
       summary: Создать новую семейную группу
-      description: Создает семейную группу с выбранным создателем и пользователями. Используется для мобильного приложения.
+      description: |
+        Создает семейную группу с выбранным создателем и участниками.
+        Владелец группы указывается в теле запроса (owner_id).
+        Также требуется валидный JWT-токен для аутентификации вызывающего.
       tags:
-        - Пользователи и Группы
-      requestBody: 
+        - Семейные группы
+      requestBody:
         required: true
-        content: 
-          application/json: 
-            schema: 
+        content:
+          application/json:
+            schema:
               $ref: '#/components/schemas/GroupCreateRequest'
       responses:
         '201':
@@ -244,11 +260,21 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/FamilyGroup'
+                $ref: '#/components/schemas/FamilyGroup'
         '400':
-          description: Ошибка валидации данных
+          description: Ошибка валидации данных (например, дубликаты участников)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Неавторизованный запрос (токен отсутствует или невалиден)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Запрещено (например, пользователь уже состоит в другой группе)
           content:
             application/json:
               schema:
@@ -262,10 +288,10 @@ paths:
 
   /api/v1/groups/{group_id}:
     get:
-      summary: Получить одну семейную группу по ID
-      description: Возвращает данные конкретной семейной группы по ее идентификатору.
+      summary: Получить семейную группу по ID
+      description: Возвращает данные конкретной семейной группы по её идентификатору. Доступно участникам группы или администраторам.
       tags:
-        - Пользователи и Группы
+        - Семейные группы
       parameters:
         - name: group_id
           in: path
@@ -273,6 +299,7 @@ paths:
           description: Уникальный идентификатор группы
           schema:
             type: integer
+            example: 100
       responses:
         '200':
           description: Успешный ответ с данными группы
@@ -280,6 +307,268 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/FamilyGroup'
+        '401':
+          description: Неавторизованный запрос (токен отсутствует или невалиден)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Нет прав на просмотр этой группы (пользователь не является участником)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Группа не найдена или неактивна
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/groups/{group_id}/members:
+    post:
+      summary: Добавить участника в группу
+      description: Добавляет нового участника в семейную группу. Требуется роль OWNER для данной группы.
+      tags:
+        - Участники группы
+      parameters:
+        - name: group_id
+          in: path
+          required: true
+          description: Уникальный идентификатор группы
+          schema:
+            type: integer
+            example: 100
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddMemberRequest'
+      responses:
+        '201':
+          description: Участник успешно добавлен
+        '400':
+          description: Ошибка валидации данных
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Неавторизованный запрос (токен отсутствует или невалиден)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Пользователь из токена не является владельцем группы
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Конфликт — пользователь уже состоит в группе или достигнут лимит участников
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/groups/{group_id}/members/{user_id}:
+    delete:
+      summary: Удалить участника из группы
+      description: Принудительно удаляет участника из группы. Требуется роль OWNER для данной группы.
+      tags:
+        - Участники группы
+      parameters:
+        - name: group_id
+          in: path
+          required: true
+          description: Уникальный идентификатор группы
+          schema:
+            type: integer
+            example: 100
+        - name: user_id
+          in: path
+          required: true
+          description: Уникальный идентификатор удаляемого пользователя
+          schema:
+            type: integer
+            example: 126
+      responses:
+        '204':
+          description: Участник успешно удалён
+        '401':
+          description: Неавторизованный запрос (токен отсутствует или невалиден)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Нет прав на удаление (только владелец может удалять других)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Группа или пользователь не найдены
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/groups/{group_id}/leave:
+    post:
+      summary: Покинуть группу
+      description: |
+        Позволяет участнику самостоятельно покинуть группу.
+        user_id в теле запроса должен совпадать с user_id в JWT-токене.
+        Владелец не может покинуть группу без предварительной передачи прав или роспуска.
+      tags:
+        - Участники группы
+      parameters:
+        - name: group_id
+          in: path
+          required: true
+          description: Уникальный идентификатор группы
+          schema:
+            type: integer
+            example: 100
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LeaveGroupRequest'
+      responses:
+        '204':
+          description: Пользователь успешно покинул группу
+        '400':
+          description: Владелец не может покинуть группу (должен сначала передать права или распустить группу)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Неавторизованный запрос (токен отсутствует или невалиден)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Нельзя вывести из группы другого пользователя через этот эндпоинт
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/groups/{group_id}/transfer-ownership:
+    post:
+      summary: Передать права владельца
+      description: Передаёт права владельца другому участнику группы. Требуется роль OWNER для данной группы.
+      tags:
+        - Управление группой
+      parameters:
+        - name: group_id
+          in: path
+          required: true
+          description: Уникальный идентификатор группы
+          schema:
+            type: integer
+            example: 100
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransferOwnershipRequest'
+      responses:
+        '204':
+          description: Права владельца успешно переданы
+        '400':
+          description: Ошибка валидации данных
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Неавторизованный запрос (токен отсутствует или невалиден)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Только текущий владелец может передавать права
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Новый владелец не найден в списке участников группы
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/groups/{group_id}/disband:
+    post:
+      summary: Распустить группу
+      description: Полностью распускает семейную группу. Требуется роль OWNER для данной группы.
+      tags:
+        - Управление группой
+      parameters:
+        - name: group_id
+          in: path
+          required: true
+          description: Уникальный идентификатор группы
+          schema:
+            type: integer
+            example: 100
+      responses:
+        '204':
+          description: Группа успешно распущена
+        '401':
+          description: Неавторизованный запрос (токен отсутствует или невалиден)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Только владелец может распустить группу
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '404':
           description: Группа не найдена
           content:
@@ -442,6 +731,36 @@ components:
           uniqueItems: true
           description: Список участников, которых можно добавить в группу
 
+    AddMemberRequest:
+      type: object
+      required:
+        - user_id
+      properties:
+        user_id:
+          type: integer
+          description: ID пользователя для добавления в группу
+          example: 126
+
+    LeaveGroupRequest:
+      type: object
+      required:
+        - user_id
+      properties:
+        user_id:
+          type: integer
+          description: ID пользователя, покидающего группу (должен совпадать с ID в JWT-токене)
+          example: 124
+
+    TransferOwnershipRequest:
+      type: object
+      required:
+        - new_owner_id
+      properties:
+        new_owner_id:
+          type: integer
+          description: ID нового владельца (должен быть текущим участником группы)
+          example: 124
+
     ErrorResponse:
       type: object
       required:
@@ -480,4 +799,14 @@ components:
             invalid_fields:
               - field: "phone_number"
                 reason: "Неверный формат международного номера"
-            
+
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        JWT токен, полученный при аутентификации.
+        Ожидаемые claims в токене:
+        - `user_id`: ID пользователя
+        - `role`: Глобальная роль пользователя

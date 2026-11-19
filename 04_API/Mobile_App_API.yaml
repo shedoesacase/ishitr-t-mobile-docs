@@ -1,0 +1,1827 @@
+﻿openapi: 3.0.3
+info:
+  title: Mobile App API
+  description: "API мобильного приложения (Модули: Авторизация, Профиль, Управление группой и лимитами)."
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:8080
+
+security:
+  - BearerAuth: []
+
+paths:
+  /api/v1/auth/request-code:
+    post:
+      summary: Запрос кода подтверждения + авторегистрация
+      description: |
+        Принимает номер телефона в международном формате. Если пользователь не найден —
+        автоматически создаёт новую запись (авторегистрация).
+        Генерирует (или переиспользует) код подтверждения и возвращает его в ответе
+        (в синтетической среде код всегда "0000").
+        
+        ВАЖНО: При успешном создании нового кода для номера, все предыдущие 
+        неиспользованные и непросроченные коды этого пользователя помечаются как недействительные.
+        В любой момент времени для одного номера живёт ровно один валидный session_id.
+        
+        Повторный запрос в течение кулдауна (60 с) возвращает 429 COOLDOWN_ACTIVE.
+        Если номер заблокирован после 3 неудачных попыток — возвращает 429 MAX_ATTEMPTS_EXCEEDED.
+      tags: 
+        - Авторизация
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RequestCodeRequest"
+      responses:
+        "200":
+          description: Код отправлен (или переиспользован). Клиент переходит на экран ввода кода.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RequestCodeResponse"
+        "400":
+          description: Ошибка валидации (неверный формат номера).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "429":
+          description: Слишком частые запросы (кулдаун или блокировка).
+          headers:
+            Retry-After:
+              description: Секунд до момента, когда можно повторить запрос.
+              schema:
+                type: integer
+                example: 42
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Внутренняя ошибка сервера.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/v1/auth/verify-code:
+    post:
+      summary: Проверка кода, выдача токенов
+      description: |
+        Проверяет код в рамках session_id. При успехе создаёт пару токенов, 
+        возвращает профиль, флаг is_new_user и контекст активной группы (если есть). 
+        При неверном коде увеличивает счётчик попыток.
+        После 3 неудачных попыток номер блокируется на 5 минут.
+      tags:
+        - Авторизация
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VerifyCodeRequest"
+      responses:
+        "200":
+          description: Код верный. Клиент авторизован, токены выданы.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VerifyCodeResponse"
+        "400":
+          description: Неверный или истёкший код, либо невалидная сессия.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "429":
+          description: Превышено количество попыток — номер заблокирован на 5 минут.
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+                example: 300
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Внутренняя ошибка сервера.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/v1/auth/refresh:
+    post:
+      summary: Обновление пары токенов с ротацией
+      description: |
+        Принимает валидный refresh_token. Выполняет ротацию: старая сессия отзывается (revoked_at),
+        создаётся новая с новой парой токенов. Если refresh_token невалиден или отозван — 401.
+      tags: 
+        - Авторизация
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RefreshRequest"
+      responses:
+        "200":
+          description: Новая пара токенов выдана.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RefreshResponse"
+        "401":
+          description: Refresh-токен невалиден, истёк или отозван.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Внутренняя ошибка сервера.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/v1/auth/logout:
+    post:
+      summary: Завершение сессии
+      description: |
+        Отзывает текущую сессию (выставляет revoked_at). Принимает refresh_token в теле запроса,
+        чтобы однозначно идентифицировать сессию даже при истёкшем access-токене.
+        Идемпотентен: повторный вызов возвращает 204 No Content.
+      tags: 
+        - Авторизация
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LogoutRequest"
+      responses:
+        "204":
+          description: Сессия отозвана (или уже была отозвана).
+        "400":
+          description: Ошибка валидации тела запроса.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Access-токен невалиден или истёк.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Внутренняя ошибка сервера.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/v1/users/me:
+    get:
+      summary: Получение профиля текущего пользователя
+      description: Возвращает профиль пользователя и контекст активной группы (если есть).
+      tags: 
+        - Профиль
+      responses:
+        "200":
+          description: Профиль пользователя.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserProfileResponse"
+        "401":
+          description: Не авторизован / access-токен невалиден.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Внутренняя ошибка сервера.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    patch:
+      summary: Обновление имени (онбординг нового пользователя)
+      description: |
+        Вызывается после verify-code с is_new_user: true. Устанавливает name (2–50 символов).
+        Повторные вызовы также поддерживаются.
+      tags: 
+        - Профиль
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateUserRequest"
+      responses:
+        "200":
+          description: Имя обновлено. Возвращается актуальный профиль.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserProfileResponse"
+        "400":
+          description: Ошибка валидации (пустое имя, неверная длина).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Не авторизован / access-токен невалиден.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Внутренняя ошибка сервера.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/v1/groups/me:
+    get:
+      summary: Получение активной группы текущего пользователя
+      description: |
+        Возвращает полную информацию об активной семейной группе текущего пользователя.
+        Используется для главного экрана.
+        Если активной группы нет — возвращает 404 GROUP_NOT_FOUND.
+      tags:
+        - Управление группой
+      responses:
+        "200":
+          description: Активная группа найдена.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GroupDetailResponse"
+        "401":
+          description: Не авторизован / access-токен невалиден.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: У пользователя нет активной группы (GROUP_NOT_FOUND).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Внутренняя ошибка сервера.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/v1/groups:
+    post:
+      summary: Создание семейной группы
+      description: |
+        Создание новой семейной группы.
+        Инициатор запроса автоматически становится Владельцем. 
+        В запросе передаются до 3 дополнительных участников (суммарно с Владельцем: от 2 до 4 человек).
+        Создаются GroupSubscription на тариф, GroupPackageBalance и дефолтные лимиты.
+        В AuditLog записываются события: GROUP_CREATED и MEMBER_ADDED.
+        Если у инициатора уже есть активная группа — возвращается 409 GROUP_ALREADY_EXISTS.
+      tags:
+        - Управление группой
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateGroupRequest"
+      responses:
+        "201":
+          description: Группа успешно создана.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GroupDetailResponse"
+        "400":
+          description: "Валидация: INVALID_NAME, INVALID_MEMBER_COUNT, DUPLICATE_MEMBERS."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Не авторизован.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Один из указанных user_id не найден в системе.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: "Конфликт: GROUP_ALREADY_EXISTS, USER_ALREADY_IN_GROUP, USER_IN_ANOTHER_GROUP."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Внутренняя ошибка сервера.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/v1/contacts:
+    get:
+      summary: Список контактов для приглашения
+      description: |
+        Возвращает пользователей, которые зарегистрированы в системе и НЕ состоят 
+        в активных группах. Фронтенд фильтрует этот список, сопоставляя 
+        его с телефонной книгой устройства.
+      tags:
+        - Управление группой
+      responses:
+        "200":
+          description: Список доступных для приглашения контактов.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContactsResponse"
+        "401":
+          description: Не авторизован.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Внутренняя ошибка сервера.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/v1/groups/{group_id}/members:
+    post:
+      summary: Добавление участника в группу
+      description: |
+        Добавление нового участника. Доступно только для Владельца (OWNER).
+        Принимает user_id или phone_number (резолвится в user_id на бэке).
+        Ограничения: макс. 4 человека в группе, пользователь не должен состоять в другой группе.
+        В AuditLog записывается событие: MEMBER_ADDED.
+      tags:
+        - Управление группой
+      parameters:
+        - name: group_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddMemberRequest"
+      responses:
+        "201":
+          description: Участник успешно добавлен.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GroupDetailResponse"
+        "400":
+          description: Ошибка валидации запроса.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Не авторизован.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Только Владелец может добавлять участников.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Группа или пользователь не найдены.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Конфликт GROUP_FULL, USER_ALREADY_IN_GROUP, USER_IN_ANOTHER_GROUP, GROUP_DISBANDED.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Внутренняя ошибка сервера.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/v1/groups/{group_id}/members/{user_id}/limits:
+    put:
+      summary: Установка/изменение индивидуального лимита
+      description: |
+        Установка лимита потребления. Доступно только для Владельца.
+        В AuditLog записывается событие: LIMIT_CHANGED.
+      tags:
+        - Управление группой
+      parameters:
+        - name: group_id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: user_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetLimitRequest"
+      responses:
+        "200":
+          description: Лимит успешно установлен.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserLimitResponse"
+        "400":
+          description: Валидация INVALID_LIMIT_VALUE, INVALID_RESOURCE_TYPE.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Не авторизован.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Только Владелец может устанавливать лимиты (FORBIDDEN).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Группа или участник не найдены.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Конфликт MEMBER_NOT_ACTIVE, GROUP_DISBANDED.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Внутренняя ошибка сервера.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/v1/groups/{group_id}/members/{user_id}/exclude:
+    post:
+      summary: Исключение участника из группы
+      description: |
+        Исключение участника Владельцем.
+        Реализовано как Soft Delete
+        Неиспользованный остаток лимита участника возвращается в общий пул группы.
+        Владелец не может исключить самого себя.
+        В AuditLog записывается событие: MEMBER_EXCLUDED.
+      tags:
+        - Управление группой
+      parameters:
+        - name: group_id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: user_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Участник успешно исключён.
+        "401":
+          description: Не авторизован.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Только Владелец может исключать участников.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Группа или участник не найдены.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: "Конфликт: CANNOT_EXCLUDE_SELF, MEMBER_NOT_ACTIVE, GROUP_DISBANDED."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Внутренняя ошибка сервера.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/v1/groups/{group_id}/leave:
+    post:
+      summary: Выход участника из группы
+      description: |
+        Добровольный выход участника из группы.
+        Реализовано как Soft Delete.
+        Неиспользованный остаток лимита возвращается в общий пул группы.
+        Владелец не может выйти из группы (для этого требуется передача прав или расформирование).
+        В AuditLog записывается событие: MEMBER_LEFT.
+      tags:
+        - Управление группой
+      parameters:
+        - name: group_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Участник успешно покинул группу.
+        "401":
+          description: Не авторизован.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Владелец не может выйти без передачи прав.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Группа не найдена или пользователь не является её участником.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Конфликт OWNER_CANNOT_LEAVE, MEMBER_NOT_ACTIVE, GROUP_DISBANDED.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Внутренняя ошибка сервера.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/v1/groups/{group_id}/transfer:
+    post:
+      summary: Инициирование передачи прав Владельца
+      description: |
+        Первый этап передачи прав. Доступно только для Владельца.
+        Создаёт ожидание подтверждения от целевого участника (через эндпоинт /transfer/accept).
+        Если целевой участник выходит из группы до подтверждения, передача автоматически отменяется.
+        Запись в AuditLog (OWNERSHIP_TRANSFERRED) происходит только после успешного подтверждения (этап 2).
+      tags:
+        - Управление группой
+      parameters:
+        - name: group_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TransferOwnershipRequest"
+      responses:
+        "200":
+          description: Передача прав успешно инициирована.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TransferPendingResponse"
+        "400":
+          description: Ошибка валидации (например, неверный new_owner_id).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Не авторизован.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Только Владелец может инициировать передачу.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Группа или целевой участник не найдены.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Конфликт TRANSFER_ALREADY_PENDING, TARGET_IS_OWNER, MEMBER_NOT_ACTIVE, GROUP_DISBANDED.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Внутренняя ошибка сервера.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/v1/groups/{group_id}/transfer/accept:
+    post:
+      summary: Принятие прав Владельца
+      description: |
+        Второй этап передачи прав. Целевой участник подтверждает принятие.
+        Прежний Владелец получает роль MEMBER, целевой участник получает роль OWNER.
+        В AuditLog записывается событие: OWNERSHIP_TRANSFERRED.
+      tags:
+        - Управление группой
+      parameters:
+        - name: group_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Права успешно переданы.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GroupDetailResponse"
+        "401":
+          description: Не авторизован.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Пользователь не является целевым участником ожидающей передачи.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Группа не найдена.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Передача не была инициирована или уже отменена (TRANSFER_NOT_PENDING).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Внутренняя ошибка сервера.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/v1/groups/{group_id}/disband:
+    post:
+      summary: Расформирование группы Владельцем
+      description: |
+        Расформирование группы. Доступно только для Владельца.
+        Реализовано как Soft Delete: FamilyGroup.status меняется на DISBANDED,
+        у всех записей GroupMember статус меняется на EXCLUDED, left_at = now.
+        В AuditLog записывается событие: GROUP_DISBANDED.
+      tags:
+        - Управление группой
+      parameters:
+        - name: group_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Группа успешно расформирована.
+        "401":
+          description: Не авторизован.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Только Владелец может расформировать группу (FORBIDDEN).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Группа не найдена.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Группа уже расформирована (GROUP_DISBANDED).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Внутренняя ошибка сервера.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/v1/groups/{group_id}/statistics:
+    get:
+      summary: Получение статистики потребления по дням
+      description: |
+        Возвращает статистику потребления (трафик в ГБ и минуты) с разбивкой по дням
+        для заданного расчётного периода.
+
+        Ролевая фильтрация:
+        - Владелец (OWNER): видит общую статистику группы и детальную разбивку по всем
+          активным участникам.
+        - Участник (MEMBER): видит статистику потребления только для себя. Остальные
+          участники в ответе не возвращаются.
+
+        Источники данных:
+        - Для текущего (активного) периода данные агрегируются из DailyUsageStat.
+        - Для завершённых (архивных) периодов используются итоговые значения из
+          ArchivedPeriodUsageStat (без помесячной разбивки по дням — daily будет пуст).
+
+        Если статистика ещё не собрана (начало периода или отсутствие потребления),
+        возвращается пустой массив daily-записей.
+      tags:
+        - Статистика и прогнозы
+      parameters:
+        - name: group_id
+          in: path
+          required: true
+          description: Идентификатор семейной группы.
+          schema:
+            type: integer
+        - name: period_id
+          in: query
+          required: false
+          description: |
+            Порядковый номер расчётного периода. Если не указан — используется текущий
+            активный период. Нумерация начинается с 1 (январь 2026).
+          schema:
+            type: integer
+            minimum: 1
+            example: 11
+        - name: resource_type
+          in: query
+          required: false
+          description: |
+            Фильтр по типу ресурса. Если не указан — возвращаются оба типа ресурсов
+            (трафик и минуты) для каждого дня.
+          schema:
+            type: string
+            enum: [TRAFFIC, MINUTES]
+      responses:
+        "200":
+          description: Статистика успешно получена (может содержать пустой массив daily).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StatisticsResponse"
+        "401":
+          description: Не авторизован (невалидный или истёкший access-токен).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Пользователь не является участником данной группы.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Группа не найдена или указанный period_id не существует.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Внутренняя ошибка сервера.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/v1/groups/{group_id}/forecast:
+    get:
+      summary: Прогноз даты исчерпания общего пакета
+      description: |
+        Рассчитывает прогнозную дату исчерпания общего пакета группы.
+
+        Алгоритм расчёта:
+          predicted_exhaustion_date = today + (remaining / avg_daily_consumption),
+        где remaining — остаток ресурса общего пакета (в ГБ для TRAFFIC),
+        avg_daily_consumption — сумма среднесуточного потребления всех активных участников
+        группы (в ГБ/день для TRAFFIC).
+
+        Надёжность прогноза (is_reliable):
+        - true — если накоплено не менее 3 дней данных о потреблении;
+        - false — если данных недостаточно (например, первый день периода или менее
+          3 дней потребления). В этом случае в качестве predicted_exhaustion_date
+          возвращается period_end (последний день расчётного периода).
+
+        Прогноз доступен как Владельцу, так и Участникам группы (данные агрегируются
+        по всей группе, индивидуальные прогнозы не возвращаются).
+      tags:
+        - Статистика и прогнозы
+      parameters:
+        - name: group_id
+          in: path
+          required: true
+          description: Идентификатор семейной группы.
+          schema:
+            type: integer
+        - name: resource_type
+          in: query
+          required: false
+          description: |
+            Тип ресурса для прогноза. По умолчанию TRAFFIC (основной сценарий
+            прогнозирования исчерпания пакета).
+          schema:
+            type: string
+            enum: [TRAFFIC, MINUTES]
+            default: TRAFFIC
+      responses:
+        "200":
+          description: Прогноз успешно рассчитан.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ForecastResponse"
+        "401":
+          description: Не авторизован.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Пользователь не является участником данной группы.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Группа не найдена.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Внутренняя ошибка сервера.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/v1/groups/{group_id}/history:
+    get:
+      summary: Получение истории изменений состава и лимитов группы
+      description: |
+        Возвращает пагинированный список событий из журнала аудита для группы.
+        События отсортированы по created_at в обратном порядке (новые сначала).
+
+        Ролевая фильтрация:
+        - Владелец (OWNER): видит полную историю всех изменений в группе — добавление,
+          исключение, выход участников, изменение лимитов любого участника, передачу
+          прав владельца, создание и расформирование группы.
+        - Участник (MEMBER): видит в истории только события, связанные с изменением
+          его личных лимитов (target_user_id = текущий пользователь).
+          Прочие события (состав группы, лимиты других участников) не возвращаются.
+      tags:
+        - Статистика и прогнозы
+      parameters:
+        - name: group_id
+          in: path
+          required: true
+          description: Идентификатор семейной группы.
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          required: false
+          description: Количество записей на странице (по умолчанию 20, максимум 50).
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 20
+        - name: offset
+          in: query
+          required: false
+          description: Смещение от начала списка (по умолчанию 0).
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        "200":
+          description: История успешно получена (может содержать пустой массив items).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HistoryResponse"
+        "400":
+          description: Ошибка валидации параметров (например, отрицательный offset).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Не авторизован.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Пользователь не является участником данной группы.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Группа не найдена.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Внутренняя ошибка сервера.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        JWT access-токен, полученный из /auth/verify-code или /auth/refresh.
+        Ожидаемые claims: user_id, role.
+
+  schemas:
+    RequestCodeRequest:
+      type: object
+      required: 
+        - phone_number
+      properties:
+        phone_number:
+          type: string
+          description: Номер телефона в международном формате. Только российские номера.
+          example: "+79001234567"
+
+    VerifyCodeRequest:
+      type: object
+      required: 
+        - session_id
+        - code
+      properties:
+        session_id:
+          type: string
+          format: uuid
+          description: Идентификатор сессии, полученный из /auth/request-code.
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        code:
+          type: string
+          description: Код подтверждения (в синтетической среде всегда "0000").
+          minLength: 4
+          maxLength: 4
+          example: "0000"
+
+    RefreshRequest:
+      type: object
+      required: 
+        - refresh_token
+      properties:
+        refresh_token:
+          type: string
+          description: Opaque refresh-токен текущей сессии.
+          example: "dGhpcyBpcyBhIHJlZnJlc2ggdG9rZW4gZXhhbXBsZQ=="
+
+    LogoutRequest:
+      type: object
+      required: 
+        - refresh_token
+      properties:
+        refresh_token:
+          type: string
+          description: Refresh-токен завершаемой сессии.
+          example: "dGhpcyBpcyBhIHJlZnJlc2ggdG9rZW4gZXhhbXBsZQ=="
+
+    UpdateUserRequest:
+      type: object
+      required: 
+        - name
+      properties:
+        name:
+          type: string
+          description: Отображаемое имя пользователя. 2–50 символов, не пустое.
+          minLength: 2
+          maxLength: 50
+          example: "Иван"
+
+    CreateGroupRequest:
+      type: object
+      required:
+        - member_ids
+      properties:
+        name:
+          type: string
+          nullable: true
+          description: Опциональное название группы. 1–100 символов.
+          minLength: 1
+          maxLength: 100
+          example: "Семья Ивановых"
+        member_ids:
+          type: array
+          description: Массив ID дополнительных участников (Владелец добавляется автоматически). От 1 до 3 элементов.
+          minItems: 1
+          maxItems: 3
+          uniqueItems: true
+          items:
+            type: integer
+          example: [101, 102]
+
+    AddMemberRequest:
+      type: object
+      description: Добавление по user_id ИЛИ phone_number (должно быть указано ровно одно поле).
+      properties:
+        user_id:
+          type: integer
+          nullable: true
+          description: ID пользователя для добавления.
+          example: 126
+        phone_number:
+          type: string
+          nullable: true
+          description: Номер телефона в международном формате (+7...). Резолвится в user_id на бэке.
+          example: "+79009876543"
+
+    SetLimitRequest:
+      type: object
+      required:
+        - resource_type
+        - limit_value
+      properties:
+        resource_type:
+          type: string
+          enum: [TRAFFIC, MINUTES]
+          description: Тип ресурса. TRAFFIC — в МБ, MINUTES — в минутах.
+          example: TRAFFIC
+        limit_value:
+          type: integer
+          minimum: 1
+          description: Абсолютное значение лимита. Валидируется в диапазоне 5%–100% от объёма тарифа.
+          example: 5000
+
+    TransferOwnershipRequest:
+      type: object
+      required:
+        - new_owner_id
+      properties:
+        new_owner_id:
+          type: integer
+          description: ID целевого участника (должен быть ACTIVE MEMBER в группе).
+          example: 124
+
+    RequestCodeResponse:
+      type: object
+      required: 
+        - session_id
+        - code
+        - code_ttl_seconds
+        - cooldown_seconds
+      properties:
+        session_id:
+          type: string
+          format: uuid
+          description: Идентификатор сессии авторизации.
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        code:
+          type: string
+          description: Код подтверждения. В синтетической среде всегда "0000".
+          example: "0000"
+        code_ttl_seconds:
+          type: integer
+          description: Осталось секунд до истечения срока действия кода.
+          example: 180
+        cooldown_seconds:
+          type: integer
+          description: Секунд до возможности повторного запроса кода. 0 — если уже доступен.
+          example: 60
+        expires_at:
+          type: string
+          format: date-time
+          description: Справочное абсолютное время истечения кода (UTC).
+          example: "2026-11-17T12:03:00Z"
+
+    VerifyCodeResponse:
+      type: object
+      required: 
+        - tokens
+        - user
+        - is_new_user
+        - group
+      properties:
+        tokens:
+          $ref: "#/components/schemas/TokenPair"
+        user:
+          $ref: "#/components/schemas/UserProfile"
+        is_new_user:
+          type: boolean
+          description: true, если пользователь только что зарегистрирован и требуется онбординг.
+          example: true
+        group:
+          nullable: true
+          allOf:
+            - $ref: "#/components/schemas/GroupContext"
+          description: Контекст активной группы или null (для выбора стартового экрана).
+
+    RefreshResponse:
+      type: object
+      required: 
+        - tokens
+      properties:
+        tokens:
+          $ref: "#/components/schemas/TokenPair"
+
+    UserProfileResponse:
+      type: object
+      required: 
+        - user
+        - group
+      properties:
+        user:
+          $ref: "#/components/schemas/UserProfile"
+        group:
+          nullable: true
+          allOf:
+            - $ref: "#/components/schemas/GroupContext"
+          description: Контекст активной группы или null.
+
+    UserProfile:
+      type: object
+      required: 
+        - user_id
+        - phone_number
+        - name
+        - created_at
+      properties:
+        user_id:
+          type: integer
+          description: Внутренний идентификатор пользователя.
+          example: 42
+        phone_number:
+          type: string
+          description: Номер телефона в международном формате.
+          example: "+79001234567"
+        name:
+          type: string
+          nullable: true
+          description: Отображаемое имя. Может быть null для новых пользователей до онбординга.
+          example: "Иван"
+        created_at:
+          type: string
+          format: date-time
+          description: Дата и время регистрации пользователя (UTC).
+          example: "2026-11-17T12:00:00Z"
+
+    GroupContext:
+      type: object
+      description: Краткий контекст активной семейной группы.
+      required: 
+        - group_id
+        - role
+        - member_count
+      properties:
+        group_id:
+          type: integer
+          description: Идентификатор семейной группы.
+          example: 7
+        role:
+          type: string
+          enum: [OWNER, MEMBER]
+          description: Роль текущего пользователя в группе.
+          example: OWNER
+        member_count:
+          type: integer
+          description: Текущее количество активных участников группы (включая владельца).
+          minimum: 2
+          maximum: 4
+          example: 3
+
+    TokenPair:
+      type: object
+      required: 
+        - access_token
+        - refresh_token
+        - access_token_ttl_seconds
+        - refresh_token_ttl_seconds
+      properties:
+        access_token:
+          type: string
+          description: JWT access-токен. Содержит claims user_id и role. TTL 900 секунд.
+          example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+        refresh_token:
+          type: string
+          description: Opaque refresh-токен. TTL 2592000 секунд (30 суток).
+          example: "dGhpcyBpcyBhIHJlZnJlc2ggdG9rZW4gZXhhbXBsZQ=="
+        access_token_ttl_seconds:
+          type: integer
+          description: TTL access-токена в секундах.
+          example: 900
+        refresh_token_ttl_seconds:
+          type: integer
+          description: TTL refresh-токена в секундах.
+          example: 2592000
+        access_token_expires_at:
+          type: string
+          format: date-time
+          description: Справочное абсолютное время истечения access-токена (UTC).
+          example: "2026-11-17T12:15:00Z"
+        refresh_token_expires_at:
+          type: string
+          format: date-time
+          description: Справочное абсолютное время истечения refresh-токена (UTC).
+          example: "2026-12-17T12:00:00Z"
+
+    GroupDetailResponse:
+      type: object
+      required:
+        - group_id
+        - owner_id
+        - status
+        - created_at
+        - members
+        - package
+        - member_count
+      properties:
+        group_id:
+          type: integer
+          description: Идентификатор семейной группы.
+          example: 7
+        name:
+          type: string
+          nullable: true
+          description: Название группы или null.
+          example: "Семья Ивановых"
+        owner_id:
+          type: integer
+          description: ID текущего Владельца группы.
+          example: 42
+        status:
+          type: string
+          enum: [ACTIVE, DISBANDED]
+          description: Статус группы.
+          example: ACTIVE
+        created_at:
+          type: string
+          format: date-time
+          description: Дата и время создания группы (UTC).
+          example: "2026-11-10T09:00:00Z"
+        member_count:
+          type: integer
+          description: Текущее количество активных участников.
+          minimum: 2
+          maximum: 4
+          example: 3
+        transfer_pending:
+          nullable: true
+          allOf:
+            - $ref: "#/components/schemas/TransferPendingInfo"
+          description: Информация об ожидающей передаче прав, если она была инициирована.
+        members:
+          type: array
+          description: Список активных участников группы.
+          items:
+            $ref: "#/components/schemas/GroupMemberDetail"
+        package:
+          $ref: "#/components/schemas/PackageInfo"
+
+    GroupMemberDetail:
+      type: object
+      required:
+        - user_id
+        - phone_number
+        - name
+        - role
+        - status
+        - joined_at
+        - limits
+      properties:
+        user_id:
+          type: integer
+          example: 42
+        phone_number:
+          type: string
+          example: "+79001234567"
+        name:
+          type: string
+          nullable: true
+          example: "Иван"
+        role:
+          type: string
+          enum: [OWNER, MEMBER]
+          example: OWNER
+        status:
+          type: string
+          enum: [ACTIVE, LEFT, EXCLUDED]
+          example: ACTIVE
+        joined_at:
+          type: string
+          format: date-time
+          example: "2026-11-10T09:00:00Z"
+        left_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Дата выхода/исключения. null для активных участников.
+          example: null
+        limits:
+          type: array
+          description: Индивидуальные лимиты участника (по одному объекту на каждый тип ресурса).
+          items:
+            $ref: "#/components/schemas/UserLimitDetail"
+
+    UserLimitDetail:
+      type: object
+      required:
+        - resource_type
+        - limit_value
+        - used_value
+        - status
+      properties:
+        resource_type:
+          type: string
+          enum: [TRAFFIC, MINUTES]
+          example: TRAFFIC
+        limit_value:
+          type: integer
+          description: Установленный лимит (МБ или минуты).
+          example: 5000
+        used_value:
+          type: integer
+          description: Текущее потребление в текущем расчётном периоде.
+          example: 1230
+        status:
+          type: string
+          enum: [ACTIVE, BLOCKED]
+          description: ACTIVE — потребление разрешено. BLOCKED — доступ заблокирован.
+          example: ACTIVE
+
+    PackageInfo:
+      type: object
+      required:
+        - package_id
+        - name
+        - total_traffic_mb
+        - total_minutes
+        - period_start
+        - period_end
+      properties:
+        package_id:
+          type: integer
+          description: ID подключённого тарифа (ServicePackage).
+          example: 3
+        name:
+          type: string
+          description: Название тарифа.
+          example: "Семейный"
+        total_traffic_mb:
+          type: integer
+          description: Общий объём трафика на группу в МБ.
+          example: 30720
+        total_minutes:
+          type: integer
+          description: Общий объём минут на группу.
+          example: 1500
+        period_start:
+          type: string
+          format: date-time
+          description: Начало текущего расчётного периода (UTC).
+          example: "2026-11-01T00:00:00Z"
+        period_end:
+          type: string
+          format: date-time
+          description: Конец текущего расчётного периода (UTC).
+          example: "2026-11-30T23:59:59Z"
+
+    TransferPendingInfo:
+      type: object
+      required:
+        - from_user_id
+        - to_user_id
+        - initiated_at
+      properties:
+        from_user_id:
+          type: integer
+          description: ID текущего Владельца (инициатора передачи).
+          example: 42
+        to_user_id:
+          type: integer
+          description: ID целевого участника (будущего Владельца).
+          example: 124
+        initiated_at:
+          type: string
+          format: date-time
+          description: Время инициирования передачи (UTC).
+          example: "2026-11-17T10:30:00Z"
+
+    TransferPendingResponse:
+      type: object
+      required:
+        - group_id
+        - transfer
+      properties:
+        group_id:
+          type: integer
+          example: 7
+        transfer:
+          $ref: "#/components/schemas/TransferPendingInfo"
+
+    ContactsResponse:
+      type: object
+      required:
+        - contacts
+      properties:
+        contacts:
+          type: array
+          description: Список пользователей, доступных для приглашения (зарегистрированы и не в активных группах).
+          items:
+            $ref: "#/components/schemas/Contact"
+
+    Contact:
+      type: object
+      required:
+        - user_id
+        - phone_number
+        - name
+      properties:
+        user_id:
+          type: integer
+          example: 88
+        phone_number:
+          type: string
+          example: "+79001112233"
+        name:
+          type: string
+          nullable: true
+          example: "Мария"
+
+    UserLimitResponse:
+      type: object
+      required:
+        - user_id
+        - group_id
+        - resource_type
+        - limit_value
+        - used_value
+        - status
+        - min_allowed
+        - max_allowed
+      properties:
+        user_id:
+          type: integer
+          example: 124
+        group_id:
+          type: integer
+          example: 7
+        resource_type:
+          type: string
+          enum: [TRAFFIC, MINUTES]
+          example: TRAFFIC
+        limit_value:
+          type: integer
+          description: Новый установленный лимит.
+          example: 5000
+        used_value:
+          type: integer
+          description: Текущее потребление.
+          example: 5200
+        status:
+          type: string
+          enum: [ACTIVE, BLOCKED]
+          description: BLOCKED, если limit_value < used_value.
+          example: BLOCKED
+        min_allowed:
+          type: integer
+          description: Минимально допустимый лимит (5% от объёма тарифа). Для слайдера на фронте.
+          example: 1536
+        max_allowed:
+          type: integer
+          description: Максимально допустимый лимит (100% от объёма тарифа). Для слайдера на фронте.
+          example: 30720
+
+    ErrorResponse:
+      type: object
+      required: 
+        - error
+      properties:
+        error:
+          type: object
+          required:
+            - code
+            - message
+            - details
+            - trace_id
+          properties:
+            code:
+              type: string
+              description: Машинно-читаемый код ошибки (константа, UPPER_SNAKE_CASE).
+              example: "INVALID_CODE"
+            message:
+              type: string
+              description: Техническое описание ошибки для логов и отладки. НЕ показывается пользователю.
+              example: "Submitted code does not match"
+            details:
+              type: object
+              nullable: true
+              description: Машиночитаемые данные для отрисовки ошибки на клиенте (состав зависит от code).
+              additionalProperties: true
+              example:
+                attempts_left: 2
+                attempts_limit: 3
+            trace_id:
+              type: string
+              description: Уникальный ID запроса для поиска в логах сервера.
+              example: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+
+    StatisticsResponse:
+      type: object
+      required:
+        - group_id
+        - period_id
+        - period_start
+        - period_end
+        - is_archived
+        - members
+      properties:
+        group_id:
+          type: integer
+          example: 7
+        period_id:
+          type: integer
+          description: Порядковый номер расчётного периода.
+          example: 11
+        period_start:
+          type: string
+          format: date-time
+          description: Начало расчётного периода (UTC).
+          example: "2026-11-01T00:00:00Z"
+        period_end:
+          type: string
+          format: date-time
+          description: Конец расчётного периода (UTC).
+          example: "2026-11-30T23:59:59Z"
+        is_archived:
+          type: boolean
+          description: true, если данные взяты из архива за завершённый период (daily будет пуст).
+          example: false
+        members:
+          type: array
+          description: Список участников со статистикой. Для OWNER — все активные участники, для MEMBER — только текущий пользователь.
+          items:
+            $ref: "#/components/schemas/MemberUsageStat"
+
+    MemberUsageStat:
+      type: object
+      required:
+        - user_id
+        - phone_number
+        - name
+        - total_traffic_gb
+        - total_minutes
+        - daily
+      properties:
+        user_id:
+          type: integer
+          example: 42
+        phone_number:
+          type: string
+          example: "+79001234567"
+        name:
+          type: string
+          nullable: true
+          example: "Иван"
+        total_traffic_gb:
+          type: number
+          format: double
+          description: Суммарный трафик за период в ГБ.
+          example: 12.45
+        total_minutes:
+          type: integer
+          description: Суммарные минуты за период.
+          example: 340
+        daily:
+          type: array
+          description: Разбивка по дням. Пустой массив для архивных периодов.
+          items:
+            $ref: "#/components/schemas/DailyUsageEntry"
+
+    DailyUsageEntry:
+      type: object
+      required:
+        - date
+        - traffic_gb
+        - minutes
+      properties:
+        date:
+          type: string
+          format: date
+          description: Дата записи статистики (UTC).
+          example: "2026-11-15"
+        traffic_gb:
+          type: number
+          format: double
+          description: Трафик за день в ГБ.
+          example: 1.25
+        minutes:
+          type: integer
+          description: Минуты за день.
+          example: 45
+
+
+    ForecastResponse:
+      type: object
+      required:
+        - group_id
+        - resource_type
+        - remaining
+        - avg_daily_consumption
+        - predicted_exhaustion_date
+        - is_reliable
+        - period_end
+      properties:
+        group_id:
+          type: integer
+          example: 7
+        resource_type:
+          type: string
+          enum: [TRAFFIC, MINUTES]
+          example: TRAFFIC
+        remaining:
+          type: number
+          format: double
+          description: Остаток ресурса общего пакета (в ГБ для TRAFFIC).
+          example: 18.5
+        avg_daily_consumption:
+          type: number
+          format: double
+          description: Сумма среднесуточного потребления всех активных участников (в ГБ/день для TRAFFIC, в минутах/день для MINUTES).
+          example: 2.3
+        predicted_exhaustion_date:
+          type: string
+          format: date
+          description: Прогнозная дата исчерпания пакета (UTC).
+          example: "2026-11-27"
+        is_reliable:
+          type: boolean
+          description: true, если накоплено >=3 дней данных о потреблении. false — прогноз ненадёжен, в качестве даты возвращён period_end.
+          example: true
+        period_end:
+          type: string
+          format: date-time
+          description: Конец текущего расчётного периода (UTC).
+          example: "2026-11-30T23:59:59Z"
+
+    HistoryResponse:
+      type: object
+      required:
+        - items
+        - pagination
+      properties:
+        items:
+          type: array
+          description: Список событий аудита, отсортированных по created_at DESC.
+          items:
+            $ref: "#/components/schemas/AuditLogEntry"
+        pagination:
+          $ref: "#/components/schemas/PaginationInfo"
+
+    AuditLogEntry:
+      type: object
+      required:
+        - id
+        - group_id
+        - actor_user_id
+        - action_type
+        - target_user_id
+        - details
+        - created_at
+      properties:
+        id:
+          type: integer
+          example: 1024
+        group_id:
+          type: integer
+          example: 7
+        actor_user_id:
+          type: integer
+          description: ID пользователя, выполнившего действие.
+          example: 42
+        action_type:
+          type: string
+          enum: [ADD_MEMBER, REMOVE_MEMBER, CHANGE_LIMIT, TRANSFER_OWNERSHIP, DISBAND_GROUP, GROUP_CREATED, MEMBER_ADDED, MEMBER_EXCLUDED, MEMBER_LEFT, LIMIT_CHANGED, OWNERSHIP_TRANSFERRED, GROUP_DISBANDED]
+          example: CHANGE_LIMIT
+        target_user_id:
+          type: integer
+          nullable: true
+          description: ID пользователя, к которому применено действие (null, если неприменимо).
+          example: 124
+        details:
+          type: object
+          nullable: true
+          description: Дополнительные детали события (состав зависит от action_type).
+          additionalProperties: true
+          example:
+            resource_type: TRAFFIC
+            old_limit: 5.0
+            new_limit: 10.0
+        created_at:
+          type: string
+          format: date-time
+          description: Время события (UTC).
+          example: "2026-11-17T14:22:00Z"
+
+    PaginationInfo:
+      type: object
+      required:
+        - total
+        - limit
+        - offset
+      properties:
+        total:
+          type: integer
+          description: Общее количество записей, доступных для данной роли.
+          example: 47
+        limit:
+          type: integer
+          description: Размер запрошенной страницы.
+          example: 20
+        offset:
+          type: integer
+          description: Запрошенное смещение.
+          example: 0
