@@ -392,10 +392,15 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
-  /api/v1/groups/{group_id}/members/{user_id}:
-    delete:
-      summary: Удалить участника из группы
-      description: Принудительно удаляет участника из группы. Требуется роль OWNER для данной группы.
+  /api/v1/groups/{group_id}/members/{user_id}/exclude:
+    post:
+      summary: Исключить участника из группы (soft delete)
+      description: |
+        Исключает участника из группы. Требуется роль OWNER для данной группы.
+        Реализовано как soft delete: запись об участии не удаляется, статус переводится
+        в `EXCLUDED`. Лимит участника аннулируется, история изменений сохраняется.
+        В AuditLog записывается событие MEMBER_EXCLUDED.
+        Владелец не может исключить самого себя.
       tags:
         - Участники группы
       parameters:
@@ -409,13 +414,13 @@ paths:
         - name: user_id
           in: path
           required: true
-          description: Уникальный идентификатор удаляемого пользователя
+          description: Уникальный идентификатор исключаемого пользователя
           schema:
             type: integer
             example: 126
       responses:
         '204':
-          description: Участник успешно удалён
+          description: Участник успешно исключён
         '401':
           description: Неавторизованный запрос (токен отсутствует или невалиден)
           content:
@@ -423,13 +428,19 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '403':
-          description: Нет прав на удаление (только владелец может удалять других)
+          description: Нет прав на исключение (только владелец может исключать других)
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '404':
           description: Группа или пользователь не найдены
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Конфликт CANNOT_EXCLUDE_SELF, MEMBER_NOT_ACTIVE, GROUP_DISBANDED
           content:
             application/json:
               schema:
@@ -566,6 +577,409 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
         '403':
           description: Только владелец может распустить группу
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Группа не найдена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/users/search:
+    get:
+      summary: Поиск пользователя по номеру телефона
+      description: |
+        Внутренний/админский контракт поиска пользователя по номеру телефона (UC-03).
+        Возвращает всех зарегистрированных пользователей с совпадающим номером без
+        ролевой фильтрации и без исключения пользователей, уже состоящих в группах —
+        фильтрацию для UI приглашения выполняет Mobile App API.
+        Если совпадений нет, возвращается пустой массив `results` (не 404).
+      tags:
+        - Пользователи и Группы
+      parameters:
+        - name: phone
+          in: query
+          required: true
+          description: Номер телефона в международном формате (+7...).
+          schema:
+            type: string
+            minLength: 6
+            example: "+79001234567"
+      responses:
+        '200':
+          description: Результаты поиска (может быть пустым массивом)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserSearchResponse'
+        '400':
+          description: Ошибка валидации параметра (INVALID_PHONE_FORMAT, PHONE_TOO_SHORT)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Неавторизованный запрос
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/groups/{group_id}/limits:
+    get:
+      summary: Получить лимиты всех участников группы
+      description: |
+        Возвращает полный список лимитов всех активных участников группы.
+        Админский контракт: данные не фильтруются по роли вызывающего — ролевая
+        видимость (BR-12) реализуется на уровне Mobile App API.
+        До первой установки лимит находится в состоянии NOT_SET: limit_value равен
+        100% объёма тарифа, персональных ограничений нет.
+      tags:
+        - Семейные группы
+      parameters:
+        - name: group_id
+          in: path
+          required: true
+          description: Уникальный идентификатор группы
+          schema:
+            type: integer
+            example: 100
+      responses:
+        '200':
+          description: Успешный ответ со списком лимитов участников
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GroupLimitsResponse'
+        '401':
+          description: Неавторизованный запрос
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Недостаточно прав
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Группа не найдена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    put:
+      summary: Батч-обновление лимитов участников группы
+      description: |
+        Батч-обновление индивидуальных лимитов нескольких участников группы за один запрос.
+        Каждый элемент updates содержит user_id и список изменений limits
+        (resource_type + limit_value). Лимит валидируется в диапазоне 5%–100% объёма
+        тарифа (BR-13); трафик и минуты независимы (BR-14).
+        Если новый лимит меньше текущего потребления, доступ блокируется (BR-03).
+        Для каждого успешно применённого изменения в AuditLog записывается LIMIT_CHANGED.
+      tags:
+        - Семейные группы
+      parameters:
+        - name: group_id
+          in: path
+          required: true
+          description: Уникальный идентификатор группы
+          schema:
+            type: integer
+            example: 100
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BatchUpdateLimitsRequest'
+      responses:
+        '200':
+          description: Результаты батч-обновления (могут содержать REJECTED-элементы)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BatchUpdateLimitsResponse'
+        '400':
+          description: Ошибка валидации INVALID_LIMIT_VALUE, INVALID_RESOURCE_TYPE, EMPTY_UPDATES
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Неавторизованный запрос
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Недостаточно прав
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Группа или участник не найдены
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Конфликт MEMBER_NOT_ACTIVE, GROUP_DISBANDED
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/groups/{group_id}/periods:
+    get:
+      summary: Получить список расчетных периодов группы
+      description: |
+        Возвращает список расчетных периодов группы, отсортированный по `period_id`
+        по убыванию. Админский контракт: данные не фильтруются по роли вызывающего.
+
+        Смена периода выполняется внутри Backend Core автоматически, когда виртуальное
+        время из `TimeChangeEvent` достигнет `GroupSubscription.period_end`. Генератор
+        не знает о периодах и не публикует событий их смены.
+      tags:
+        - Семейные группы
+      parameters:
+        - name: group_id
+          in: path
+          required: true
+          description: Уникальный идентификатор группы
+          schema:
+            type: integer
+            example: 100
+      responses:
+        '200':
+          description: Успешный ответ со списком периодов
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PeriodListResponse'
+        '401':
+          description: Неавторизованный запрос
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Группа не найдена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/groups/{group_id}/statistics:
+    get:
+      summary: Получить статистику потребления по дням
+      description: |
+        Возвращает статистику потребления (трафик в ГБ и минуты) с разбивкой по дням
+        для заданного расчётного периода. Админский контракт: возвращаются данные
+        всех активных участников без ролевой фильтрации — фильтрация BR-12
+        реализуется на уровне Mobile App API.
+        Для текущего периода данные агрегируются из DailyUsageStat, для архивных
+        периодов — из ArchivedPeriodUsageStat (daily будет пуст).
+      tags:
+        - Семейные группы
+      parameters:
+        - name: group_id
+          in: path
+          required: true
+          description: Уникальный идентификатор группы
+          schema:
+            type: integer
+            example: 100
+        - name: period_id
+          in: query
+          required: false
+          description: Порядковый номер расчётного периода. Если не указан — текущий. Нумерация с 1 (январь 2026).
+          schema:
+            type: integer
+            minimum: 1
+        - name: resource_type
+          in: query
+          required: false
+          description: Фильтр по типу ресурса. Если не указан — оба типа.
+          schema:
+            type: string
+            enum: [TRAFFIC, MINUTES]
+      responses:
+        '200':
+          description: Успешный ответ со статистикой (daily может быть пустым)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatisticsResponse'
+        '400':
+          description: Ошибка валидации параметров
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Неавторизованный запрос
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Группа или период не найдены
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/groups/{group_id}/forecast:
+    get:
+      summary: Рассчитать прогноз даты исчерпания пакета
+      description: |
+        Рассчитывает прогноз даты исчерпания общего пакета и персональные прогнозы
+        всех активных участников по BR-06. Админский контракт: массив `members`
+        содержит прогнозы всех участников без ролевой фильтрации.
+        is_reliable = true, если накоплено не менее 3 дней данных; иначе в качестве
+        даты возвращается period_end.
+      tags:
+        - Семейные группы
+      parameters:
+        - name: group_id
+          in: path
+          required: true
+          description: Уникальный идентификатор группы
+          schema:
+            type: integer
+            example: 100
+        - name: resource_type
+          in: query
+          required: false
+          description: Тип ресурса для прогноза. По умолчанию TRAFFIC.
+          schema:
+            type: string
+            enum: [TRAFFIC, MINUTES]
+            default: TRAFFIC
+      responses:
+        '200':
+          description: Успешный ответ с прогнозом
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForecastResponse'
+        '400':
+          description: Ошибка валидации параметров
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Неавторизованный запрос
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Группа не найдена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/groups/{group_id}/history:
+    get:
+      summary: Получить историю изменений состава и лимитов группы
+      description: |
+        Возвращает пагинированный список событий аудита, отсортированных по created_at DESC.
+        Админский контракт: возвращается полная история без ролевой фильтрации —
+        фильтрация BR-10 реализуется на уровне Mobile App API.
+      tags:
+        - Семейные группы
+      parameters:
+        - name: group_id
+          in: path
+          required: true
+          description: Уникальный идентификатор группы
+          schema:
+            type: integer
+            example: 100
+        - name: limit
+          in: query
+          required: false
+          description: Количество записей на странице (по умолчанию 20, максимум 50).
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 20
+        - name: offset
+          in: query
+          required: false
+          description: Смещение от начала списка (по умолчанию 0).
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        '200':
+          description: Успешный ответ с историей (items может быть пустым)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HistoryResponse'
+        '400':
+          description: Ошибка валидации параметров
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Неавторизованный запрос
           content:
             application/json:
               schema:
@@ -792,6 +1206,489 @@ components:
             invalid_fields:
               - field: "phone_number"
                 reason: "Неверный формат международного номера"
+    UserSearchResult:
+      type: object
+      required:
+        - user_id
+        - phone_number
+        - name
+      properties:
+        user_id:
+          type: integer
+          example: 88
+        phone_number:
+          type: string
+          example: "+79001112233"
+        name:
+          type: string
+          nullable: true
+          example: "Мария"
+
+    UserSearchResponse:
+      type: object
+      required:
+        - results
+      properties:
+        results:
+          type: array
+          description: Найденные пользователи. Пустой массив, если совпадений нет.
+          items:
+            $ref: '#/components/schemas/UserSearchResult'
+
+    UserLimitDetail:
+      type: object
+      required:
+        - resource_type
+        - limit_value
+        - used_value
+        - status
+      properties:
+        resource_type:
+          type: string
+          enum: [TRAFFIC, MINUTES]
+          example: TRAFFIC
+        limit_value:
+          type: number
+          format: double
+          description: Установленный лимит (ГБ для TRAFFIC, минуты для MINUTES). В состоянии NOT_SET равен 100% объёма тарифа.
+          example: 5
+        used_value:
+          type: number
+          format: double
+          description: Текущее потребление в текущем расчётном периоде.
+          example: 1.23
+        status:
+          type: string
+          enum: [NOT_SET, ACTIVE, BLOCKED]
+          description: NOT_SET — лимит не задан (100% пакета без персональных ограничений). ACTIVE — потребление разрешено. BLOCKED — доступ заблокирован.
+          example: ACTIVE
+
+    MemberLimits:
+      type: object
+      required:
+        - user_id
+        - phone_number
+        - name
+        - role
+        - limits
+      properties:
+        user_id:
+          type: integer
+          example: 124
+        phone_number:
+          type: string
+          example: "+79001234567"
+        name:
+          type: string
+          nullable: true
+          example: "Иван"
+        role:
+          type: string
+          enum: [OWNER, MEMBER]
+          example: MEMBER
+        limits:
+          type: array
+          items:
+            $ref: '#/components/schemas/UserLimitDetail'
+
+    GroupLimitsResponse:
+      type: object
+      required:
+        - group_id
+        - members
+      properties:
+        group_id:
+          type: integer
+          example: 100
+        members:
+          type: array
+          description: Все активные участники группы.
+          items:
+            $ref: '#/components/schemas/MemberLimits'
+
+    SetLimitRequest:
+      type: object
+      required:
+        - resource_type
+        - limit_value
+      properties:
+        resource_type:
+          type: string
+          enum: [TRAFFIC, MINUTES]
+          example: TRAFFIC
+        limit_value:
+          type: number
+          format: double
+          minimum: 0
+          description: Абсолютное значение лимита (ГБ/минуты). Валидируется 5%–100% объёма тарифа.
+          example: 5
+
+    LimitUpdateItem:
+      type: object
+      required:
+        - user_id
+        - limits
+      properties:
+        user_id:
+          type: integer
+          example: 124
+        limits:
+          type: array
+          minItems: 1
+          maxItems: 2
+          items:
+            $ref: '#/components/schemas/SetLimitRequest'
+
+    BatchUpdateLimitsRequest:
+      type: object
+      required:
+        - updates
+      properties:
+        updates:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/LimitUpdateItem'
+
+    MemberLimitResult:
+      type: object
+      required:
+        - user_id
+        - resource_type
+        - status
+      properties:
+        user_id:
+          type: integer
+          example: 124
+        resource_type:
+          type: string
+          enum: [TRAFFIC, MINUTES]
+          example: TRAFFIC
+        status:
+          type: string
+          enum: [APPLIED, REJECTED]
+          example: APPLIED
+        error_code:
+          type: string
+          nullable: true
+          example: null
+        limit:
+          allOf:
+            - $ref: '#/components/schemas/UserLimitDetail'
+          nullable: true
+
+    BatchUpdateLimitsResponse:
+      type: object
+      required:
+        - group_id
+        - results
+      properties:
+        group_id:
+          type: integer
+          example: 100
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/MemberLimitResult'
+
+    DailyUsageEntry:
+      type: object
+      required:
+        - date
+        - traffic_gb
+        - minutes
+      properties:
+        date:
+          type: string
+          format: date
+          example: "2026-11-15"
+        traffic_gb:
+          type: number
+          format: double
+          example: 1.25
+        minutes:
+          type: integer
+          example: 45
+
+    MemberUsageStat:
+      type: object
+      required:
+        - user_id
+        - phone_number
+        - name
+        - total_traffic_gb
+        - total_minutes
+        - daily
+      properties:
+        user_id:
+          type: integer
+          example: 42
+        phone_number:
+          type: string
+          example: "+79001234567"
+        name:
+          type: string
+          nullable: true
+          example: "Иван"
+        total_traffic_gb:
+          type: number
+          format: double
+          example: 12.45
+        total_minutes:
+          type: integer
+          example: 340
+        daily:
+          type: array
+          description: Разбивка по дням. Пустой массив для архивных периодов.
+          items:
+            $ref: '#/components/schemas/DailyUsageEntry'
+
+    StatisticsResponse:
+      type: object
+      required:
+        - group_id
+        - period_id
+        - period_start
+        - period_end
+        - is_archived
+        - members
+      properties:
+        group_id:
+          type: integer
+          example: 100
+        period_id:
+          type: integer
+          example: 11
+        period_start:
+          type: string
+          format: date-time
+          example: "2026-11-01T00:00:00Z"
+        period_end:
+          type: string
+          format: date-time
+          example: "2026-11-30T23:59:59Z"
+        is_archived:
+          type: boolean
+          example: false
+        members:
+          type: array
+          description: Все активные участники группы.
+          items:
+            $ref: '#/components/schemas/MemberUsageStat'
+
+    MemberForecast:
+      type: object
+      required:
+        - user_id
+        - phone_number
+        - name
+        - avg_daily_consumption
+        - predicted_exhaustion_date
+        - is_reliable
+      properties:
+        user_id:
+          type: integer
+          example: 124
+        phone_number:
+          type: string
+          example: "+79001234567"
+        name:
+          type: string
+          nullable: true
+          example: "Иван"
+        avg_daily_consumption:
+          type: number
+          format: double
+          description: Среднесуточное потребление участника.
+          example: 0.75
+        predicted_exhaustion_date:
+          type: string
+          format: date
+          description: Прогнозная дата исчерпания личного лимита (UTC). При недостатке данных возвращается period_end.
+          example: "2026-11-29"
+        is_reliable:
+          type: boolean
+          description: true, если по участнику накоплено не менее 3 дней данных.
+          example: true
+
+    ForecastResponse:
+      type: object
+      required:
+        - group_id
+        - resource_type
+        - remaining
+        - avg_daily_consumption
+        - predicted_exhaustion_date
+        - is_reliable
+        - period_end
+        - members
+      properties:
+        group_id:
+          type: integer
+          example: 100
+        resource_type:
+          type: string
+          enum: [TRAFFIC, MINUTES]
+          example: TRAFFIC
+        remaining:
+          type: number
+          format: double
+          example: 18.5
+        avg_daily_consumption:
+          type: number
+          format: double
+          description: Сумма среднесуточного потребления всех активных участников.
+          example: 2.3
+        predicted_exhaustion_date:
+          type: string
+          format: date
+          example: "2026-11-27"
+        is_reliable:
+          type: boolean
+          example: true
+        period_end:
+          type: string
+          format: date-time
+          example: "2026-11-30T23:59:59Z"
+        members:
+          type: array
+          description: Персональные прогнозы всех активных участников.
+          items:
+            $ref: '#/components/schemas/MemberForecast'
+
+    AuditLogEntry:
+      type: object
+      required:
+        - id
+        - group_id
+        - actor_user_id
+        - action_type
+        - target_user_id
+        - details
+        - created_at
+      properties:
+        id:
+          type: integer
+          example: 1024
+        group_id:
+          type: integer
+          example: 100
+        actor_user_id:
+          type: integer
+          example: 42
+        action_type:
+          type: string
+          enum: [ADD_MEMBER, REMOVE_MEMBER, CHANGE_LIMIT, TRANSFER_OWNERSHIP, DISBAND_GROUP, GROUP_CREATED, MEMBER_ADDED, MEMBER_EXCLUDED, MEMBER_LEFT, LIMIT_CHANGED, OWNERSHIP_TRANSFERRED, GROUP_DISBANDED]
+          example: CHANGE_LIMIT
+        target_user_id:
+          type: integer
+          nullable: true
+          example: 124
+        details:
+          type: object
+          nullable: true
+          additionalProperties: true
+          example:
+            resource_type: TRAFFIC
+            old_limit: 5.0
+            new_limit: 10.0
+        created_at:
+          type: string
+          format: date-time
+          example: "2026-11-17T14:22:00Z"
+
+    PaginationInfo:
+      type: object
+      required:
+        - total
+        - limit
+        - offset
+      properties:
+        total:
+          type: integer
+          example: 47
+        limit:
+          type: integer
+          example: 20
+        offset:
+          type: integer
+          example: 0
+
+    HistoryResponse:
+      type: object
+      required:
+        - items
+        - pagination
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuditLogEntry'
+        pagination:
+          $ref: '#/components/schemas/PaginationInfo'
+
+    PeriodInfo:
+      type: object
+      description: Расчетный период группы по BR-07. Нумерация периодов начинается с 1 (январь 2026).
+      required:
+        - period_id
+        - period_start
+        - period_end
+        - status
+        - is_current
+        - package_id
+        - package_name
+        - total_traffic_gb
+        - total_minutes
+      properties:
+        period_id:
+          type: integer
+          description: Порядковый номер периода (январь 2026 = 1).
+          example: 11
+        period_start:
+          type: string
+          format: date-time
+          example: "2026-11-01T00:00:00Z"
+        period_end:
+          type: string
+          format: date-time
+          example: "2026-11-30T23:59:59Z"
+        status:
+          type: string
+          enum: [ACTIVE, ARCHIVED]
+          example: ACTIVE
+        is_current:
+          type: boolean
+          example: true
+        package_id:
+          type: integer
+          example: 100
+        package_name:
+          type: string
+          example: "Бюджетный"
+        total_traffic_gb:
+          type: number
+          format: double
+          example: 30.72
+        total_minutes:
+          type: integer
+          example: 1500
+
+    PeriodListResponse:
+      type: object
+      required:
+        - group_id
+        - periods
+      properties:
+        group_id:
+          type: integer
+          example: 100
+        periods:
+          type: array
+          description: Периоды по убыванию period_id (новые сначала).
+          items:
+            $ref: '#/components/schemas/PeriodInfo'
+
   securitySchemes:
     BearerAuth:
       type: http

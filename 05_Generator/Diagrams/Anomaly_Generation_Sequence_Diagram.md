@@ -8,8 +8,8 @@ sequenceDiagram
     participant Core as Backend Core
 
     Admin->>UI: Запустить аномалию: User№123
-    UI->>Gen: POST /api/v1/generator/events/anomaly/user/start {id = 123, resource_type = TRAFFIC}
-    Gen->>Gen: Рассчитать скорость
+    UI->>Gen: POST /api/v1/generator/events/anomaly/user/start {user_id = 123, resource_type = TRAFFIC, user_limits = [{resource_type: TRAFFIC, limit_value: 10}]}
+    Gen->>Gen: Рассчитать объём (15–50% от limit_value) и скорость
     Gen-->>UI: 201 Created
     loop В течение 6 виртуальных часов (с учетом ускорения)
         Gen->>Gen: Сформировать чанк события

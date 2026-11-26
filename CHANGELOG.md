@@ -4,10 +4,34 @@
 
 ---
 ## Неопубликованное
+### ➕ Добавлено
+* **Generator_Service_API.yaml:**
+	* Добавлена аутентификация по API-ключу для всех эндпоинтов управления генератором.
+	* Добавлены публичные эндпоинты `GET /health` и `GET /ready`.
+	* В запрос запуска аномалии добавлено обязательное поле `user_limits` — массив снимков личных лимитов пользователя для расчёта объёма аномалии.
+	* Добавлена схема `UserLimitSnapshot` в `components/schemas`.
+* **Generator_Concept_and_Architecture.md:**
+	* Уточнён сценарий аномального роста: генератор получает снимок личных лимитов и рассчитывает объём аномалии от 15 до 50% переданного лимита.
+* **Mobile_App_API.yaml:**
+	* Добавлен `GET /api/v1/users/search?phone=...` — поиск пользователя по номеру телефона для приглашения в группу.
+	* Добавлен агрегированный `GET /api/v1/groups/{group_id}/limits` с ролевой фильтрацией.
+	* Добавлен `PUT /api/v1/groups/{group_id}/limits` — обновление лимитов нескольких участников за один запрос (только OWNER).
+	* В `ForecastResponse` добавлено обязательное поле `members` с персональными прогнозами участников: Владелец видит прогнозы всех участников, Участник — только свой.
+	* Добавлены схемы: `UserSearchResult`, `UserSearchResponse`, `MemberLimits`, `GroupLimitsResponse`, `LimitUpdateItem`, `BatchUpdateLimitsRequest`, `MemberLimitResult`, `BatchUpdateLimitsResponse`, `MemberForecast`.
+* **Backend_Core_API.yaml:**
+	* Добавлен внутренний контракт для всех модулей: `GET /api/v1/users/search`, `GET/PUT /api/v1/groups/{group_id}/limits`, `GET /api/v1/groups/{group_id}/statistics`, `GET /api/v1/groups/{group_id}/forecast`, `GET /api/v1/groups/{group_id}/history`.
+	* Добавлены схемы: `UserSearchResult`, `UserSearchResponse`, `UserLimitDetail`, `MemberLimits`, `GroupLimitsResponse`, `SetLimitRequest`, `LimitUpdateItem`, `BatchUpdateLimitsRequest`, `MemberLimitResult`, `BatchUpdateLimitsResponse`, `DailyUsageEntry`, `MemberUsageStat`, `StatisticsResponse`, `MemberForecast`, `ForecastResponse`, `AuditLogEntry`, `PaginationInfo`, `HistoryResponse`.
+* **Mobile_App_API.yaml, Backend_Core_API.yaml:**
+	* Добавлен `GET /api/v1/groups/{group_id}/periods` — список расчетных периодов группы с статусами `ACTIVE`/`ARCHIVED.
+	* Добавлены схемы `PeriodInfo` и `PeriodListResponse`.
+
 ### 🔄 Изменено
 - Единицы измерения трафика во всех документах приведены к единому типу (ГБ).
 - **Use_Cases.md:**
 	- В UC-01/UC-02/UC-03 теперь явно указано состояние персональных ограничений до установки лимита.
+	- UC-13 переписан: смена периода выполняется автоматически по виртуальному времени из `TimeChangeEvent.
+- **Backend_Core_API.yaml:**
+	- `DELETE /api/v1/groups/{group_id}/members/{user_id}` заменён на `POST /api/v1/groups/{group_id}/members/{user_id}/exclude`: soft delete со статусом `EXCLUDED`, сохранением истории и записью в AuditLog.
 -  **Mobile_App_API.yaml, Backend_Core_API.yaml, Generator_Service_API.yaml:**
 	- В апи-контрактах также теперь явно указано состояние персональных ограничений до установки лимита.
 - **Data_Dictionary.md:**

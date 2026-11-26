@@ -1,12 +1,54 @@
 openapi: 3.0.3
 info:
   title: Generator Service API
-  description: Внутреннее API генератора. Используется для админ-панели самого генератора.
-  version: 19.10.2026
+  description: |
+    Внутреннее API генератора. Используется для админ-панели самого генератора.
+  version: 26.11.2026
 servers:
   - url: http://localhost:8082
+
+security:
+  - ApiKeyAuth: []
   
 paths:
+  /health:
+    get:
+      summary: Проверка доступности сервиса
+      description: Возвращает статус работающего сервиса без проверки зависимостей.
+      tags:
+        - Диагностика
+      security: []
+      responses:
+        '200':
+          description: Сервис доступен
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+
+  /ready:
+    get:
+      summary: Проверка готовности сервиса
+      description: Возвращает статус готовности сервиса к обработке запросов.
+      tags:
+        - Диагностика
+      security: []
+      responses:
+        '200':
+          description: Сервис готов к обработке запросов
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ready
+
   /api/v1/generator/time:
     get:
       summary: Получить текущий статус времени
@@ -14,6 +56,18 @@ paths:
       tags:
         - Управление временем
       responses:
+        '401':
+          description: Отсутствует или неверный формат API-ключа
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: API-ключ недействителен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '200':
           description: Успешный ответ со статусом времени
           content:
@@ -40,6 +94,18 @@ paths:
             schema: 
               $ref: '#/components/schemas/TimeAccelerateRequest'
       responses: 
+        '401':
+          description: Отсутствует или неверный формат API-ключа
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: API-ключ недействителен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '200':
           description: Время ускорено
           content:
@@ -65,6 +131,18 @@ paths:
       tags:
         - Управление временем
       responses: 
+        '401':
+          description: Отсутствует или неверный формат API-ключа
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: API-ключ недействителен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '200':
           description: Время успешно сброшено до стандартного
           content: 
@@ -90,6 +168,18 @@ paths:
       tags:
         - Управление временем
       responses: 
+        '401':
+          description: Отсутствует или неверный формат API-ключа
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: API-ключ недействителен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '200':
           description: Время успешно остановлено
           content: 
@@ -115,6 +205,18 @@ paths:
       tags:
         - Управление временем
       responses: 
+        '401':
+          description: Отсутствует или неверный формат API-ключа
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: API-ключ недействителен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '200':
           description: Течение времени успешно возобновлено
           content: 
@@ -146,6 +248,18 @@ paths:
             schema:
               $ref: '#/components/schemas/UserBackgroundStartRequest'
       responses:
+        '401':
+          description: Отсутствует или неверный формат API-ключа
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: API-ключ недействителен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '201':
           description: Поток успешно запущен
         '409':
@@ -179,6 +293,18 @@ paths:
             schema:
               $ref: '#/components/schemas/UserBackgroundStopRequest'
       responses:
+        '401':
+          description: Отсутствует или неверный формат API-ключа
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: API-ключ недействителен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '201':
           description: Поток успешно остановлен
         '409':
@@ -204,7 +330,7 @@ paths:
   /api/v1/generator/events/anomaly/user/start:
     post:
       summary: Запуск аномального скачка потребления для отдельного пользователя
-      description: Аномальный скачок потребления длится 6 виртуальных часов и, по истечении 6 часов, должен израсходовать заданное количество ресурса. Скорость расхода равна отношению объема требуемого расхода к 6. В случае, если ресурса меньше, чем задано (в запросе 15%, а по факту 10%), скорость сохраняется и событие автоматически останавливается по достижению конца трафика.
+      description: Аномальный скачок потребления длится 6 виртуальных часов и, по истечении 6 часов, должен израсходовать заданное количество ресурса. Скорость расхода равна отношению объема требуемого расхода к 6. Объём аномалии рассчитывается генератором как случайное значение в диапазоне 15–50% от переданного личного лимита пользователя (поле limit_value в user_limits) для выбранного resource_type. В случае, если ресурса меньше, чем задано (в запросе 15%, а по факту 10%), скорость сохраняется и событие автоматически останавливается по достижению конца трафика. Генератор не проверяет текущее потребление и статус лимита — обработкой балансов занимается Backend Core.
       tags:
         - События
       requestBody:
@@ -214,6 +340,18 @@ paths:
             schema: 
               $ref: '#/components/schemas/UserAnomalyStartRequest'
       responses: 
+        '401':
+          description: Отсутствует или неверный формат API-ключа
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: API-ключ недействителен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '201':
           description: Скачок запущен
         '409':
@@ -248,6 +386,18 @@ paths:
             schema: 
               $ref: '#/components/schemas/UserAnomalyStopRequest'
       responses: 
+        '401':
+          description: Отсутствует или неверный формат API-ключа
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: API-ключ недействителен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '201':
           description: Скачок остановлен
         '409':
@@ -282,6 +432,18 @@ paths:
             schema:
               $ref: '#/components/schemas/AllUsersBackgroundStartRequest'
       responses:
+        '401':
+          description: Отсутствует или неверный формат API-ключа
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: API-ключ недействителен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '200':
           description: Массовая генерация успешно обработана
           content:
@@ -314,6 +476,18 @@ paths:
             schema:
               $ref: '#/components/schemas/InstantDeductRequest'
       responses:
+        '401':
+          description: Отсутствует или неверный формат API-ключа
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: API-ключ недействителен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '200':
           description: Событие опубликовано
           content:
@@ -362,6 +536,18 @@ paths:
             schema:
               $ref: '#/components/schemas/DelayedEventRequest'
       responses:
+        '401':
+          description: Отсутствует или неверный формат API-ключа
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: API-ключ недействителен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '200':
           description: Запоздалое событие опубликовано
           content:
@@ -406,6 +592,18 @@ paths:
       tags:
         - События
       responses:
+        '401':
+          description: Отсутствует или неверный формат API-ключа
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: API-ключ недействителен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '200':
           description: Список активных задач генерации
           content:
@@ -420,6 +618,16 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
 
 components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: |
+        API-ключ генератора. Значение задаётся через переменную окружения GENERATOR_API_KEY
+        и передаётся в заголовке X-API-Key.
+        Для обращений к Backend Core API используется отдельный токен.
+
   schemas:
     TimeStatus:
       type: object
@@ -492,13 +700,41 @@ components:
       required: 
         - user_id
         - resource_type
+        - user_limits
       properties: 
         user_id:
           type: integer
+          description: ID пользователя, для которого запускается аномалия
+          example: 123
         resource_type:
           type: string
           enum: [TRAFFIC, MINUTES]
-        
+          description: Тип ресурса, по которому генерируется аномальный скачок
+          example: TRAFFIC
+        user_limits:
+          type: array
+          description: Снимок текущих личных лимитов пользователя на момент старта аномалии. Передаётся клиентом (админ-панелью) из данных Backend Core API. Генератор использует limit_value соответствующего resource_type для расчёта объёма аномалии (15–50% от значения).
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/UserLimitSnapshot'
+
+    UserLimitSnapshot:
+      type: object
+      description: Снимок личного лимита пользователя по одному типу ресурса. Передаётся в генератор только для расчёта объёма аномалии; генератор не проверяет used_value и статус.
+      required:
+        - resource_type
+        - limit_value
+      properties:
+        resource_type:
+          type: string
+          enum: [TRAFFIC, MINUTES]
+          example: TRAFFIC
+        limit_value:
+          type: number
+          format: double
+          description: Абсолютное значение личного лимита (ГБ для TRAFFIC, минуты для MINUTES). В состоянии NOT_SET равно 100% объёма тарифа.
+          example: 10
+
     UserAnomalyStopRequest:
       type: object
       required: 
