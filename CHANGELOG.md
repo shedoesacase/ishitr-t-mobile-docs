@@ -4,8 +4,15 @@
 
 ---
 ## Неопубликованное
-
-
+### 🔄 Изменено
+- Единицы измерения трафика во всех документах приведены к единому типу (ГБ).
+- **Use_Cases.md:**
+	- В UC-01/UC-02/UC-03 теперь явно указано состояние персональных ограничений до установки лимита.
+-  **Mobile_App_API.yaml, Backend_Core_API.yaml, Generator_Service_API.yaml:**
+	- В апи-контрактах также теперь явно указано состояние персональных ограничений до установки лимита.
+- **Data_Dictionary.md:**
+	- Статус лимитов до установки добавлен в словарь данных.
+* Все REST-контракты теперь используют плоский `ErrorResponse` с полями `error_code`, `message`, `timestamp`, `trace_id` (обязательные) и опциональным `details`. 
 ---
 
 ## [0.1.0] — 25-09-2026
@@ -181,9 +188,6 @@
 	* Реализован единый формат ошибок.
 	- Перечисление `action_type` в `AuditLogEntry` расширено полным набором значений из Data_Dictionary (`ADD_MEMBER`, `REMOVE_MEMBER`, `CHANGE_LIMIT`, `TRANSFER_OWNERSHIP`, `DISBAND_GROUP`, `GROUP_CREATED`, `MEMBER_ADDED`, `MEMBER_EXCLUDED`, `MEMBER_LEFT`, `LIMIT_CHANGED`, `OWNERSHIP_TRANSFERRED`, `GROUP_DISBANDED`).
 ### 🔄 Изменено
-- **Mobile_App_API.yaml:**
-	- Исправлена опечатка в имени схемы ошибок: `ErrorResponce` → `ErrorResponse` (глобально, все 78 вхождений: объявления `$ref` во всех 18 эндпоинтах + объявление схемы в `components/schemas`).
-	- Схема `ForecastResponse` поддерживает `resource_type` `TRAFFIC` и `MINUTES` (прогноз исчерпания по обоим типам ресурса).
 - **Business_Requirements.md:**
 	- **BR-06** актуализирован: алгоритм расчёта предполагаемой даты исчерпания применяется теперь независимо к обоим типам ресурсов — трафику и минутам (остаток ресурса делится на сумму среднесуточного потребления по соответствующему типу).
 - **Data_Dictionary.md:**

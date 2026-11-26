@@ -1,4 +1,4 @@
-﻿openapi: 3.0.3
+openapi: 3.0.3
 info:
   title: Mobile App API
   description: "API мобильного приложения (Модули: Авторизация, Профиль, Управление группой и лимитами)."
@@ -294,7 +294,9 @@ paths:
         Создание новой семейной группы.
         Инициатор запроса автоматически становится Владельцем. 
         В запросе передаются до 3 дополнительных участников (суммарно с Владельцем: от 2 до 4 человек).
-        Создаются GroupSubscription на тариф, GroupPackageBalance и дефолтные лимиты.
+        Создаются GroupSubscription на тариф, GroupPackageBalance и начальные лимиты `NOT_SET`
+        для Владельца и всех Участников: `limit_value` равен 100% объёма тарифа (`max_allowed`),
+        персональных ограничений нет, потребление идёт из общего пакета.
         В AuditLog записываются события: GROUP_CREATED и MEMBER_ADDED.
         Если у инициатора уже есть активная группа — возвращается 409 GROUP_ALREADY_EXISTS.
       tags:
@@ -379,6 +381,8 @@ paths:
         Добавление нового участника. Доступно только для Владельца (OWNER).
         Принимает user_id или phone_number (резолвится в user_id на бэке).
         Ограничения: макс. 4 человека в группе, пользователь не должен состоять в другой группе.
+        Новый Участник получает начальные лимиты `NOT_SET`: `limit_value` равен 100% объёма
+        тарифа (`max_allowed`), персональных ограничений нет, потребление идёт из общего пакета.
         В AuditLog записывается событие: MEMBER_ADDED.
       tags:
         - Управление группой
@@ -443,6 +447,9 @@ paths:
       summary: Установка/изменение индивидуального лимита
       description: |
         Установка лимита потребления. Доступно только для Владельца.
+        До установки лимита у Участника действует состояние `NOT_SET`: `limit_value` равен
+        100% объёма тарифа (`max_allowed`), персональных ограничений нет, потребление идёт
+        из общего пакета. Первый вызов заменяет это состояние явным лимитом.
         В AuditLog записывается событие: LIMIT_CHANGED.
       tags:
         - Управление группой
@@ -585,12 +592,6 @@ paths:
           description: Участник успешно покинул группу.
         "401":
           description: Не авторизован.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "403":
-          description: Владелец не может выйти без передачи прав.
           content:
             application/json:
               schema:
@@ -1122,6 +1123,7 @@ components:
 
     SetLimitRequest:
       type: object
+      description: Первый вызов заменяет начальное состояние `NOT_SET` (100% пакета, без персональных ограничений) на явный лимит.
       required:
         - resource_type
         - limit_value
@@ -1129,13 +1131,14 @@ components:
         resource_type:
           type: string
           enum: [TRAFFIC, MINUTES]
-          description: Тип ресурса. TRAFFIC — в МБ, MINUTES — в минутах.
+          description: Тип ресурса. TRAFFIC — в ГБ, MINUTES — в минутах.
           example: TRAFFIC
         limit_value:
-          type: integer
-          minimum: 1
-          description: Абсолютное значение лимита. Валидируется в диапазоне 5%–100% от объёма тарифа.
-          example: 5000
+          type: number
+          format: double
+          minimum: 0
+          description: Абсолютное значение лимита (ГБ для TRAFFIC, минуты для MINUTES). Валидируется в диапазоне 5%–100% от объёма тарифа; значение 100% (`max_allowed`) означает отсутствие персонального ограничения.
+          example: 5
 
     TransferOwnershipRequest:
       type: object
@@ -1402,7 +1405,7 @@ components:
           example: null
         limits:
           type: array
-          description: Индивидуальные лимиты участника (по одному объекту на каждый тип ресурса).
+          description: Индивидуальные лимиты участника (по одному объекту на каждый тип ресурса). До установки возвращается состояние `NOT_SET` со значением 100% пакета.
           items:
             $ref: "#/components/schemas/UserLimitDetail"
 
@@ -1419,25 +1422,27 @@ components:
           enum: [TRAFFIC, MINUTES]
           example: TRAFFIC
         limit_value:
-          type: integer
-          description: Установленный лимит (МБ или минуты).
-          example: 5000
+          type: number
+          format: double
+          description: Установленный лимит (ГБ для TRAFFIC, минуты для MINUTES). В состоянии `NOT_SET` равен 100% объёма тарифа.
+          example: 5
         used_value:
-          type: integer
-          description: Текущее потребление в текущем расчётном периоде.
-          example: 1230
+          type: number
+          format: double
+          description: Текущее потребление в текущем расчётном периоде (ГБ для TRAFFIC, минуты для MINUTES).
+          example: 1.23
         status:
           type: string
-          enum: [ACTIVE, BLOCKED]
-          description: ACTIVE — потребление разрешено. BLOCKED — доступ заблокирован.
-          example: ACTIVE
+          enum: [NOT_SET, ACTIVE, BLOCKED]
+          description: NOT_SET — лимит не задан (до первой установки действует 100% пакета без персональных ограничений). ACTIVE — потребление разрешено. BLOCKED — доступ заблокирован.
+          example: NOT_SET
 
     PackageInfo:
       type: object
       required:
         - package_id
         - name
-        - total_traffic_mb
+        - total_traffic_gb
         - total_minutes
         - period_start
         - period_end
@@ -1450,10 +1455,11 @@ components:
           type: string
           description: Название тарифа.
           example: "Семейный"
-        total_traffic_mb:
-          type: integer
-          description: Общий объём трафика на группу в МБ.
-          example: 30720
+        total_traffic_gb:
+          type: number
+          format: double
+          description: Общий объём трафика на группу в ГБ.
+          example: 30.72
         total_minutes:
           type: integer
           description: Общий объём минут на группу.
@@ -1554,61 +1560,70 @@ components:
           enum: [TRAFFIC, MINUTES]
           example: TRAFFIC
         limit_value:
-          type: integer
-          description: Новый установленный лимит.
-          example: 5000
+          type: number
+          format: double
+          description: Новый установленный лимит (ГБ для TRAFFIC, минуты для MINUTES). До установки состояние `NOT_SET` соответствовало 100% объёма тарифа.
+          example: 5
         used_value:
-          type: integer
-          description: Текущее потребление.
-          example: 5200
+          type: number
+          format: double
+          description: Текущее потребление (ГБ для TRAFFIC, минуты для MINUTES).
+          example: 5.2
         status:
           type: string
-          enum: [ACTIVE, BLOCKED]
-          description: BLOCKED, если limit_value < used_value.
-          example: BLOCKED
+          enum: [NOT_SET, ACTIVE, BLOCKED]
+          description: NOT_SET — лимит не задан (до первой установки действует 100% пакета без персональных ограничений); BLOCKED, если limit_value < used_value.
+          example: ACTIVE
         min_allowed:
-          type: integer
-          description: Минимально допустимый лимит (5% от объёма тарифа). Для слайдера на фронте.
-          example: 1536
+          type: number
+          format: double
+          description: Минимально допустимый лимит (5% от объёма тарифа, ГБ для TRAFFIC). Для слайдера на фронте.
+          example: 1.536
         max_allowed:
-          type: integer
-          description: Максимально допустимый лимит (100% от объёма тарифа). Для слайдера на фронте.
-          example: 30720
+          type: number
+          format: double
+          description: Максимально допустимый лимит (100% от объёма тарифа, ГБ для TRAFFIC). Для слайдера на фронте.
+          example: 30.72
 
     ErrorResponse:
       type: object
-      required: 
-        - error
+      required:
+        - error_code
+        - message
+        - timestamp
+        - trace_id
       properties:
-        error:
+        error_code:
+          type: string
+          description: |
+            Машинно-читаемый код ошибки (константа, UPPER_SNAKE_CASE).
+            Используется клиентом для программной обработки; UI формирует текст по коду.
+          example: "INVALID_CODE"
+        message:
+          type: string
+          description: |
+            Человекочитаемое техническое описание ошибки для логов и отладки.
+            НЕ является локализованным текстом для конечного пользователя.
+          example: "Submitted code does not match"
+        timestamp:
+          type: string
+          format: date-time
+          description: Время возникновения ошибки (в виртуальном времени системы).
+          example: "2026-11-15T14:30:00+03:00"
+        trace_id:
+          type: string
+          description: Уникальный ID запроса для поиска в логах сервиса. Критически важен для отладки.
+          example: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+        details:
           type: object
-          required:
-            - code
-            - message
-            - details
-            - trace_id
-          properties:
-            code:
-              type: string
-              description: Машинно-читаемый код ошибки (константа, UPPER_SNAKE_CASE).
-              example: "INVALID_CODE"
-            message:
-              type: string
-              description: Техническое описание ошибки для логов и отладки. НЕ показывается пользователю.
-              example: "Submitted code does not match"
-            details:
-              type: object
-              nullable: true
-              description: Машиночитаемые данные для отрисовки ошибки на клиенте (состав зависит от code).
-              additionalProperties: true
-              example:
-                attempts_left: 2
-                attempts_limit: 3
-            trace_id:
-              type: string
-              description: Уникальный ID запроса для поиска в логах сервера.
-              example: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
-
+          nullable: true
+          description: |
+            Дополнительные машиночитаемые детали ошибки. Структура зависит от error_code.
+            Может отсутствовать или быть null.
+          additionalProperties: true
+          example:
+            attempts_left: 2
+            attempts_limit: 3
     StatisticsResponse:
       type: object
       required:
